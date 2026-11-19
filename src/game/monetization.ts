@@ -1,4 +1,5 @@
 import {
+  isAdMobAvailable,
   requestAdConsent as refreshNativeAdConsent,
   showNativeRewardedAd,
 } from './admob';
@@ -498,7 +499,7 @@ export async function showRewardedAd(
   }
 
   // Native production: only the real Google rewarded-ad result can grant a reward.
-  if (isNativePlatform()) {
+  if (isAdMobAvailable()) {
     const rewarded = await showNativeRewardedAd();
     return {
       rewarded,
