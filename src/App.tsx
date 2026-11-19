@@ -2022,9 +2022,10 @@ export default function App() {
       adConsentStatus: res.consentObtained ? 'obtained' : 'unknown',
     }));
     if (res.error) {
-      return res.error.includes('available in the installed Android app')
-        ? res.error
-        : 'Ad privacy could not be refreshed. Ads remain disabled. Check your connection and retry.';
+      // Preserve the native UMP error for diagnosis instead of hiding it
+      // behind a generic connection message. All ad placements share this
+      // consent gate, so the native code is essential to identify the cause.
+      return `Google UMP error: ${res.error}`;
     }
     if (res.canRequestAds) {
       return 'Ad privacy choices checked. Google permits ad requests.';
