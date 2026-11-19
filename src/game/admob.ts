@@ -51,19 +51,25 @@ function getNativeErrorText(error: unknown): string {
 }
 
 function getUserFacingAdError(error: unknown, stage: 'load' | 'show'): string {
-  const raw = getNativeErrorText(error).toLowerCase();
+  const detail = getNativeErrorText(error).trim();
+  const raw = detail.toLowerCase();
+  let summary: string;
+
   if (/no.?fill|no ads available|inventory/.test(raw)) {
-    return 'No rewarded ad is available right now. Please try again later.';
+    summary = 'No rewarded ad is available right now. Please try again later.';
+  } else if (/network|internet|connection|timeout|unreachable/.test(raw)) {
+    summary = 'The ad could not connect. Check your internet connection and try again.';
+  } else if (/not loaded|not ready|already showing|invalid state/.test(raw)) {
+    summary = 'The rewarded ad is not ready yet. Please try again in a moment.';
+  } else {
+    summary = stage === 'load'
+      ? 'A rewarded ad could not be loaded. Please try again shortly.'
+      : 'The rewarded ad could not be opened. No reward was given.';
   }
-  if (/network|internet|connection|timeout|unreachable/.test(raw)) {
-    return 'The ad could not connect. Check your internet connection and try again.';
-  }
-  if (/not loaded|not ready|already showing|invalid state/.test(raw)) {
-    return 'The rewarded ad is not ready yet. Please try again in a moment.';
-  }
-  return stage === 'load'
-    ? 'A rewarded ad could not be loaded. Please try again shortly.'
-    : 'The rewarded ad could not be opened. No reward was given.';
+
+  // Keep the native SDK's error text visible so production failures can be
+  // diagnosed on-device without requiring Logcat access.
+  return detail ? `${summary} (Google SDK: ${detail.slice(0, 240)})` : summary;
 }
 
 export function isAdMobAvailable(): boolean {
