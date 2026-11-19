@@ -512,9 +512,20 @@ export default function App() {
     void hideNativeSplashScreen();
   }, []);
 
-  // AdMob initialize on Android native (no-op on web)
+  // Refresh UMP consent on every native app launch. The AdMob SDK and
+  // rewarded inventory are initialized only after UMP permits ad requests.
   useEffect(() => {
-    void initAdMob();
+    let active = true;
+    void initAdMob().then((consent) => {
+      if (!active) return;
+      setMonetization((prev) => ({
+        ...prev,
+        adConsentStatus: consent.canRequestAds ? 'obtained' : 'unknown',
+      }));
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Sync Tailwind dark class, reduced-motion preference, colorblind symbols, and Edge-to-Edge StatusBar chrome
@@ -1966,9 +1977,15 @@ export default function App() {
       ...prev,
       adConsentStatus: res.consentObtained ? 'obtained' : 'unknown',
     }));
-    return res.canRequestAds
-      ? 'Google UMP ad privacy consent updated.'
-      : 'Native UMP consent not obtained in offline web mode (ads disabled).';
+    if (res.error) {
+      return 'Ad privacy could not be refreshed. Ads remain disabled.';
+    }
+    if (res.canRequestAds) {
+      return 'Ad privacy choices checked. Google permits ad requests.';
+    }
+    return isNativePlatform()
+      ? 'Ad consent is not available yet. Ads remain disabled.'
+      : 'Ad privacy controls are available in the installed Android app.';
   }, []);
 
   // Global Pointer listeners for fluid drag-and-drop

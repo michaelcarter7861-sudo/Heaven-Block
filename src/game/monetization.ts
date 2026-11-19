@@ -1,7 +1,7 @@
 import {
-  isRewardedAdReady,
-  preloadRewardedAd,
-  REWARDED_AD_UNIT_ID,
+  isAdMobAvailable,
+  requestAdConsent as refreshNativeAdConsent,
+  showNativeRewardedAd,
 } from './admob';
 import type { AdRewardType, DifficultyTier, MonetizationState, StoreProductId } from './types';
 
@@ -154,50 +154,14 @@ export function shouldTriggerRateUsPrompt(
   );
 }
 
-export interface AdConsentResult {
-  consentObtained: boolean;
-  canRequestAds: boolean;
-  provider: 'ump_native' | 'ump_offline_ready';
-}
+export type AdConsentResult = import('./admob').AdConsentResult;
 
 /**
- * Google UMP (GDPR / EU Consent) hook ready for `@capacitor-community/admob`
- * or native Android UserMessagingPlatform integration.
+ * Refresh UMP consent from Settings. Native UMP errors fail closed; browser
+ * builds never pretend that consent has been collected.
  */
 export async function requestAdConsent(): Promise<AdConsentResult> {
-  if (typeof window !== 'undefined') {
-    const cap = (
-      window as unknown as {
-        Capacitor?: {
-          Plugins?: {
-            AdMob?: {
-              requestConsentInfo?: () => Promise<{ canRequestAds?: boolean }>;
-            };
-          };
-        };
-      }
-    ).Capacitor;
-    const admob = cap?.Plugins?.AdMob;
-    if (admob?.requestConsentInfo) {
-      try {
-        const info = await admob.requestConsentInfo();
-        const canRequest = Boolean(info?.canRequestAds ?? false);
-        return {
-          consentObtained: canRequest,
-          canRequestAds: canRequest,
-          provider: 'ump_native',
-        };
-      } catch {
-        // Fallback cleanly to non-ad state when native UMP fails
-      }
-    }
-  }
-
-  return {
-    consentObtained: false,
-    canRequestAds: false,
-    provider: 'ump_offline_ready',
-  };
+  return refreshNativeAdConsent({ showPrivacyOptions: true });
 }
 
 export interface RestorePurchasesResult {
@@ -534,44 +498,29 @@ export async function showRewardedAd(
     };
   }
 
-  if (typeof window !== 'undefined') {
-    const cap = (
-      window as unknown as {
-        Capacitor?: {
-          Plugins?: {
-            AdMob?: {
-              prepareRewardVideoAd?: (opts: { adId: string }) => Promise<void>;
-              showRewardVideoAd?: () => Promise<{ rewarded?: boolean } | unknown>;
-            };
-          };
-        };
-      }
-    ).Capacitor;
-    const admob = cap?.Plugins?.AdMob;
-    if (admob?.showRewardVideoAd) {
-      try {
-        if (!isRewardedAdReady() && admob.prepareRewardVideoAd) {
-          await admob.prepareRewardVideoAd({ adId: REWARDED_AD_UNIT_ID });
-        }
-        await admob.showRewardVideoAd();
-        void preloadRewardedAd();
-        return {
-          rewarded: true,
-          rewardType,
-          skippedAsVip: false,
-        };
-      } catch {
-        void preloadRewardedAd();
-        return {
-          rewarded: false,
-          rewardType,
-          skippedAsVip: false,
-        };
-      }
-    }
+  // Native production: only the real Google rewarded-ad result can grant a reward.
+  if (isAdMobAvailable()) {
+    const rewarded = await showNativeRewardedAd();
+    return {
+      rewarded,
+      rewardType,
+      skippedAsVip: false,
+    };
   }
 
-  // Cancel any stale ad session cleanly before opening a new one
+  // Browser preview simulation is development-only. Production web builds and
+  // native builds with a missing plugin fail closed and never grant fake rewards.
+  const isDevelopmentPreview = Boolean(
+    (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV
+  );
+  if (!isDevelopmentPreview) {
+    return {
+      rewarded: false,
+      rewardType,
+      skippedAsVip: false,
+    };
+  }
+
   if (activeTimer || activeResolver) {
     cancelRewardedAd();
   }
@@ -603,13 +552,11 @@ export async function showRewardedAd(
         activeResolver = null;
         activeRewardType = null;
         emitAdStatus(null);
-        if (finishResolve) {
-          finishResolve({
-            rewarded: true,
-            rewardType,
-            skippedAsVip: false,
-          });
-        }
+        finishResolve?.({
+          rewarded: true,
+          rewardType,
+          skippedAsVip: false,
+        });
       } else {
         emitAdStatus({
           active: true,

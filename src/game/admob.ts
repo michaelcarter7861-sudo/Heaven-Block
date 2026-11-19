@@ -1,62 +1,206 @@
-const _viteEnv = (
-  import.meta as unknown as { env?: Record<string, string | undefined> }
+import { Capacitor } from '@capacitor/core';
+import {
+  AdMob,
+  AdmobConsentStatus,
+} from '@capacitor-community/admob';
+
+const viteEnv = (
+  import.meta as unknown as {
+    env?: { DEV?: boolean; VITE_ADMOB_REWARDED_ID?: string };
+  }
 ).env;
 
-export const REWARDED_AD_UNIT_ID: string =
-  (_viteEnv
-    ? (import.meta.env.VITE_ADMOB_REWARDED_ID as string | undefined)
-    : undefined) || 'ca-app-pub-3940256099942544/5224354917';
+const GOOGLE_TEST_REWARDED_AD_UNIT_ID =
+  'ca-app-pub-3940256099942544/5224354917';
 
-interface AdMobNativePlugin {
-  initialize(opts?: { requestTrackingAuthorization?: boolean }): Promise<void>;
-  prepareRewardVideoAd(opts: { adId: string }): Promise<void>;
-  showRewardVideoAd(): Promise<unknown>;
-  addListener(
-    event: string,
-    handler: (data: unknown) => void
-  ): Promise<{ remove(): void }>;
+/**
+ * Production builds must receive the real ad-unit ID through
+ * VITE_ADMOB_REWARDED_ID. The Google sample ID is used only in Vite dev mode.
+ */
+export const REWARDED_AD_UNIT_ID =
+  viteEnv?.VITE_ADMOB_REWARDED_ID?.trim() ||
+  (viteEnv?.DEV ? GOOGLE_TEST_REWARDED_AD_UNIT_ID : '');
+
+export interface AdConsentResult {
+  consentObtained: boolean;
+  canRequestAds: boolean;
+  privacyOptionsRequired: boolean;
+  provider: 'ump_native' | 'unavailable';
+  error?: string;
 }
 
-function getNativeAdMob(): AdMobNativePlugin | null {
-  if (typeof window === 'undefined') return null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const cap = (window as any).Capacitor;
-  if (!cap?.isNativePlatform?.()) return null;
-  return (cap?.Plugins?.AdMob as AdMobNativePlugin | undefined) ?? null;
-}
-
-let _initialized = false;
-let _adReady = false;
-
-export async function initAdMob(): Promise<void> {
-  if (_initialized) return;
-  const admob = getNativeAdMob();
-  if (!admob) return;
-  try {
-    await admob.initialize({ requestTrackingAuthorization: false });
-    _initialized = true;
-    await preloadRewardedAd();
-  } catch (err) {
-    console.warn('[AdMob] init failed:', err);
-  }
-}
-
-export async function preloadRewardedAd(): Promise<void> {
-  const admob = getNativeAdMob();
-  if (!admob) return;
-  try {
-    await admob.prepareRewardVideoAd({ adId: REWARDED_AD_UNIT_ID });
-    _adReady = true;
-  } catch (err) {
-    _adReady = false;
-    console.warn('[AdMob] preload failed:', err);
-  }
-}
+let initialized = false;
+let adReady = false;
+let consentAllowsAds = false;
+let consentFlow: Promise<AdConsentResult> | null = null;
 
 export function isAdMobAvailable(): boolean {
-  return getNativeAdMob() !== null;
+  return Capacitor.isNativePlatform();
 }
 
 export function isRewardedAdReady(): boolean {
-  return _adReady && isAdMobAvailable();
+  return adReady && consentAllowsAds && isAdMobAvailable();
+}
+
+async function initializeAdsSdk(): Promise<void> {
+  if (initialized) return;
+  await AdMob.initialize();
+  initialized = true;
+}
+
+export async function preloadRewardedAd(): Promise<void> {
+  if (!isAdMobAvailable() || !consentAllowsAds || !initialized) {
+    adReady = false;
+    return;
+  }
+
+  if (!REWARDED_AD_UNIT_ID) {
+    adReady = false;
+    console.error(
+      '[AdMob] Missing VITE_ADMOB_REWARDED_ID. Refusing to request a production ad.'
+    );
+    return;
+  }
+
+  try {
+    await AdMob.prepareRewardVideoAd({ adId: REWARDED_AD_UNIT_ID });
+    adReady = true;
+  } catch (error) {
+    adReady = false;
+    console.warn('[AdMob] Rewarded ad preload failed:', error);
+  }
+}
+
+/**
+ * Refresh UMP at app launch. When called from Settings, present the dedicated
+ * privacy-options form if Google says the publisher must expose that entry point.
+ * Never initialize or request ads unless UMP reports canRequestAds=true.
+ */
+export async function requestAdConsent(options?: {
+  showPrivacyOptions?: boolean;
+}): Promise<AdConsentResult> {
+  if (!isAdMobAvailable()) {
+    consentAllowsAds = false;
+    adReady = false;
+    return {
+      consentObtained: false,
+      canRequestAds: false,
+      privacyOptionsRequired: false,
+      provider: 'unavailable',
+    };
+  }
+
+  // Serialize overlapping startup / Settings requests. If Settings is opened
+  // during startup, wait for startup and then still honor the privacy-options action.
+  if (consentFlow) {
+    const pending = consentFlow;
+    const pendingResult = await pending;
+    if (!options?.showPrivacyOptions) return pendingResult;
+  }
+
+  consentFlow = (async () => {
+    try {
+      let info = await AdMob.requestConsentInfo();
+      let privacyOptionsRequired =
+        info.privacyOptionsRequirementStatus ===
+        'REQUIRED';
+
+      if (options?.showPrivacyOptions && privacyOptionsRequired) {
+        await AdMob.showPrivacyOptionsForm();
+        // Re-read the UMP state after the user closes the privacy options form.
+        info = await AdMob.requestConsentInfo();
+        privacyOptionsRequired =
+          info.privacyOptionsRequirementStatus ===
+          'REQUIRED';
+      }
+
+      // A privacy-options form and an initial consent form serve different
+      // purposes. If UMP still reports consent REQUIRED, present that form too.
+      if (
+        info.isConsentFormAvailable &&
+        info.status === AdmobConsentStatus.REQUIRED
+      ) {
+        info = await AdMob.showConsentForm();
+        privacyOptionsRequired =
+          info.privacyOptionsRequirementStatus ===
+          'REQUIRED';
+      }
+
+      consentAllowsAds = Boolean(info.canRequestAds);
+      if (consentAllowsAds) {
+        await initializeAdsSdk();
+        await preloadRewardedAd();
+      } else {
+        adReady = false;
+      }
+
+      return {
+        consentObtained: Boolean(info.canRequestAds),
+        canRequestAds: consentAllowsAds,
+        privacyOptionsRequired,
+        provider: 'ump_native' as const,
+      };
+    } catch (error) {
+      // Fail closed: a UMP/network/plugin error must never enable ad requests.
+      consentAllowsAds = false;
+      adReady = false;
+      console.warn('[AdMob] UMP consent flow failed; ads remain disabled:', error);
+      return {
+        consentObtained: false,
+        canRequestAds: false,
+        privacyOptionsRequired: false,
+        provider: 'ump_native' as const,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    } finally {
+      consentFlow = null;
+    }
+  })();
+
+  return consentFlow;
+}
+
+/** Startup entry point: UMP first, Mobile Ads SDK second, then preload. */
+export async function initAdMob(): Promise<AdConsentResult> {
+  return requestAdConsent();
+}
+
+/**
+ * Show one native rewarded ad. The plugin's resolved reward item is the sole
+ * authority for granting the in-game reward; dismissal or load/show failure
+ * returns false. No timer or browser simulation is reachable from this method.
+ */
+export async function showNativeRewardedAd(): Promise<boolean> {
+  if (
+    !isAdMobAvailable() ||
+    !consentAllowsAds ||
+    !initialized ||
+    !REWARDED_AD_UNIT_ID
+  ) {
+    return false;
+  }
+
+  if (!adReady) {
+    await preloadRewardedAd();
+  }
+  if (!adReady) return false;
+
+  try {
+    const reward = await AdMob.showRewardVideoAd();
+    adReady = false;
+
+    // The plugin resolves with the earned reward item. Do not also grant from
+    // the Rewarded event: that would double-credit the same completed ad.
+    const amount = Number(reward?.amount);
+    const type = String(reward?.type ?? '').trim();
+    const earned = Number.isFinite(amount) && amount > 0 && type.length > 0;
+
+    void preloadRewardedAd();
+    return earned;
+  } catch (error) {
+    adReady = false;
+    console.warn('[AdMob] Rewarded ad was not completed:', error);
+    void preloadRewardedAd();
+    return false;
+  }
 }
