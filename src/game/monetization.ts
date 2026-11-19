@@ -1,3 +1,8 @@
+import {
+  isRewardedAdReady,
+  preloadRewardedAd,
+  REWARDED_AD_UNIT_ID,
+} from './admob';
 import type { AdRewardType, DifficultyTier, MonetizationState, StoreProductId } from './types';
 
 export interface RewardedAdResult {
@@ -535,6 +540,7 @@ export async function showRewardedAd(
         Capacitor?: {
           Plugins?: {
             AdMob?: {
+              prepareRewardVideoAd?: (opts: { adId: string }) => Promise<void>;
               showRewardVideoAd?: () => Promise<{ rewarded?: boolean } | unknown>;
             };
           };
@@ -544,13 +550,18 @@ export async function showRewardedAd(
     const admob = cap?.Plugins?.AdMob;
     if (admob?.showRewardVideoAd) {
       try {
+        if (!isRewardedAdReady() && admob.prepareRewardVideoAd) {
+          await admob.prepareRewardVideoAd({ adId: REWARDED_AD_UNIT_ID });
+        }
         await admob.showRewardVideoAd();
+        void preloadRewardedAd();
         return {
           rewarded: true,
           rewardType,
           skippedAsVip: false,
         };
       } catch {
+        void preloadRewardedAd();
         return {
           rewarded: false,
           rewardType,

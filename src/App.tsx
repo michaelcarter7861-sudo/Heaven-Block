@@ -92,6 +92,7 @@ import {
   triggerNativeInAppReview,
   type RewardedAdPreviewStatus,
 } from './game/monetization';
+import { initAdMob } from './game/admob';
 import {
   hideNativeSplashScreen,
   registerAndroidBackHandler,
@@ -509,6 +510,11 @@ export default function App() {
   // Dismiss native Android 12+ SplashScreen once React is mounted
   useEffect(() => {
     void hideNativeSplashScreen();
+  }, []);
+
+  // AdMob initialize on Android native (no-op on web)
+  useEffect(() => {
+    void initAdMob();
   }, []);
 
   // Sync Tailwind dark class, reduced-motion preference, colorblind symbols, and Edge-to-Edge StatusBar chrome
