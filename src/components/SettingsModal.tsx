@@ -115,6 +115,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   );
   const [restoringPurchases, setRestoringPurchases] = useState<boolean>(false);
   const [consentMsg, setConsentMsg] = useState<string | null>(null);
+  const [requestingConsent, setRequestingConsent] = useState<boolean>(false);
   const [confirmResetStep, setConfirmResetStep] = useState<boolean>(false);
 
   const handleGenerateAndCopy = async () => {
@@ -174,8 +175,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const handleConsentClick = async () => {
-    const msg = await onRequestAdConsent();
-    setConsentMsg(msg);
+    if (requestingConsent) return;
+    setRequestingConsent(true);
+    setConsentMsg(null);
+    try {
+      const msg = await onRequestAdConsent();
+      setConsentMsg(msg);
+    } catch {
+      setConsentMsg(
+        'Ad privacy could not be checked. Check your internet connection and try again.'
+      );
+    } finally {
+      setRequestingConsent(false);
+    }
   };
 
   return (
@@ -391,15 +403,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <button
             type="button"
             data-testid="ad-consent-btn"
-            onClick={handleConsentClick}
-            className="w-full flex items-center justify-between gap-2 min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-semibold border bg-[#EFE4D2] border-[#D4C0A3] hover:bg-[#E7D8C0] dark:bg-[#221A14] dark:border-[#3D2E22] dark:hover:bg-[#2B2119]"
+            onClick={() => void handleConsentClick()}
+            disabled={requestingConsent}
+            className="w-full flex items-center justify-between gap-2 min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-semibold border bg-[#EFE4D2] border-[#D4C0A3] hover:bg-[#E7D8C0] disabled:opacity-60 dark:bg-[#221A14] dark:border-[#3D2E22] dark:hover:bg-[#2B2119]"
           >
             <span className="inline-flex items-center gap-2">
               <Shield className="w-4 h-4 text-[#1E3A2F] dark:text-amber-300" />
-              <span>Ad Privacy & Consent (UMP)</span>
+              <span>{requestingConsent ? 'Checking Ad Privacy…' : 'Ad Privacy & Consent (UMP)'}</span>
             </span>
             <span className="text-[11px] text-[#6E5A46] dark:text-[#A4907B]">
-              {adConsentStatus === 'obtained' ? 'Configured' : 'Review'}
+              {requestingConsent ? 'Please wait' : adConsentStatus === 'obtained' ? 'Ready' : 'Review'}
             </span>
           </button>
           {consentMsg && (

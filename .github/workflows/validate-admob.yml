@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - fix/admob-ump-and-reward-validation
+      - fix/rewarded-ad-feedback-and-drag-performance
 
 permissions:
   contents: read

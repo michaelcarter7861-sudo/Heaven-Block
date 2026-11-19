@@ -37,6 +37,7 @@ test('production/non-native rewarded ads fail closed while VIP rewards remain av
   assert.equal(unavailableResult.rewarded, false);
   assert.equal(unavailableResult.rewardType, 'UNDO');
   assert.equal(unavailableResult.skippedAsVip, false);
+  assert.match(unavailableResult.message ?? '', /installed Android app/i);
   assert.deepEqual(seenStates, []);
 
   const vipResult = await showRewardedAd('DOUBLE_STARS', { noAdsOwned: true });
