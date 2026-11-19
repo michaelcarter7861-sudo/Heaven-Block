@@ -82,9 +82,18 @@ export const ShopModal: React.FC<ShopModalProps> = ({
   const handleWatchFreeGems = async () => {
     if (busyProductId || !isNative) return;
     setBusyProductId('free_gems_ad');
-    const res = await onWatchFreeGemsAd();
-    setFeedback(res);
-    setBusyProductId(null);
+    setFeedback(null);
+    try {
+      const res = await onWatchFreeGemsAd();
+      setFeedback(res);
+    } catch {
+      setFeedback({
+        ok: false,
+        message: 'The rewarded ad could not be opened. Please try again later.',
+      });
+    } finally {
+      setBusyProductId(null);
+    }
   };
 
   const handleGemBuy = (itemId: GemShopItemId) => {
