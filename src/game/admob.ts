@@ -156,9 +156,14 @@ export async function requestAdConsent(options?: {
   }
 
   consentFlow = (async () => {
+    let privacyOptionsRequired = false;
+    let info: Awaited<ReturnType<typeof AdMob.requestConsentInfo>>;
+
+    // Keep UMP failures separate from Mobile Ads SDK initialization failures.
+    // The latter can occur when Android's native content view is not ready yet.
     try {
-      let info = await AdMob.requestConsentInfo();
-      let privacyOptionsRequired =
+      info = await AdMob.requestConsentInfo();
+      privacyOptionsRequired =
         info.privacyOptionsRequirementStatus === 'REQUIRED';
 
       if (options?.showPrivacyOptions && privacyOptionsRequired) {
@@ -176,42 +181,55 @@ export async function requestAdConsent(options?: {
         privacyOptionsRequired =
           info.privacyOptionsRequirementStatus === 'REQUIRED';
       }
-
-      consentAllowsAds = Boolean(info.canRequestAds);
-      if (consentAllowsAds) {
-        lastConsentMessage = null;
-        await initializeAdsSdk();
-        // Preload failure does not invalidate consent; the next tap can retry.
-        await preloadRewardedAd();
-      } else {
-        adReady = false;
-        lastConsentMessage =
-          'Google has not enabled ad requests yet. Complete the privacy consent step in Settings and try again.';
-      }
-
-      return {
-        consentObtained: consentAllowsAds,
-        canRequestAds: consentAllowsAds,
-        privacyOptionsRequired,
-        provider: 'ump_native' as const,
-      };
     } catch (error) {
       consentAllowsAds = false;
       adReady = false;
       lastConsentMessage =
         'Google privacy consent could not be checked. Check your connection, then retry in Settings.';
-      console.warn('[AdMob] UMP consent flow failed; ads remain disabled:', error);
+      console.warn('[AdMob] UMP consent request failed:', error);
       return {
         consentObtained: false,
         canRequestAds: false,
-        privacyOptionsRequired: false,
+        privacyOptionsRequired,
         provider: 'ump_native' as const,
         error: getNativeErrorText(error) || lastConsentMessage,
       };
-    } finally {
-      consentFlow = null;
     }
-  })();
+
+    consentAllowsAds = Boolean(info.canRequestAds);
+    if (!consentAllowsAds) {
+      adReady = false;
+      lastConsentMessage =
+        'Google has not enabled ad requests yet. Complete the privacy consent step in Settings and try again.';
+      return {
+        consentObtained: false,
+        canRequestAds: false,
+        privacyOptionsRequired,
+        provider: 'ump_native' as const,
+      };
+    }
+
+    // Consent is valid even if the ad SDK needs a later initialization retry.
+    lastConsentMessage = null;
+    try {
+      await initializeAdsSdk();
+      await preloadRewardedAd();
+    } catch (error) {
+      adReady = false;
+      lastAdLoadMessage =
+        'Ad service initialization is delayed. Retry the rewarded ad in a moment.';
+      console.warn('[AdMob] Mobile Ads SDK initialization failed after consent:', error);
+    }
+
+    return {
+      consentObtained: true,
+      canRequestAds: true,
+      privacyOptionsRequired,
+      provider: 'ump_native' as const,
+    };
+  })().finally(() => {
+    consentFlow = null;
+  });
 
   return consentFlow;
 }
@@ -249,10 +267,16 @@ export async function showNativeRewardedAd(): Promise<NativeRewardedAdResult> {
   }
 
   if (!initialized) {
-    return {
-      rewarded: false,
-      message: 'The ad service is still starting. Please try again in a moment.',
-    };
+    try {
+      await initializeAdsSdk();
+    } catch (error) {
+      console.warn('[AdMob] Deferred SDK initialization failed:', error);
+      return {
+        rewarded: false,
+        message:
+          'The ad service is not ready yet. Open Settings → Ad Privacy & Consent and retry shortly.',
+      };
+    }
   }
 
   if (!REWARDED_AD_UNIT_ID) {
