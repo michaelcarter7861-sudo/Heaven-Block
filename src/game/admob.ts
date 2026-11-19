@@ -2,7 +2,6 @@ import { Capacitor } from '@capacitor/core';
 import {
   AdMob,
   AdmobConsentStatus,
-  PrivacyOptionsRequirementStatus,
 } from '@capacitor-community/admob';
 
 const viteEnv = (
@@ -104,7 +103,7 @@ export async function requestAdConsent(options?: {
       let info = await AdMob.requestConsentInfo();
       let privacyOptionsRequired =
         info.privacyOptionsRequirementStatus ===
-        PrivacyOptionsRequirementStatus.REQUIRED;
+        'REQUIRED';
 
       if (options?.showPrivacyOptions && privacyOptionsRequired) {
         await AdMob.showPrivacyOptionsForm();
