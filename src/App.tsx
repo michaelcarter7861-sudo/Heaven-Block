@@ -486,6 +486,13 @@ export default function App() {
     () => Boolean(initialSaved.activeRun && !duelParam)
   );
 
+  const dragSessionRef = useRef<DragSession | null>(null);
+  const pendingDragPointerRef = useRef<{
+    pointerId: number;
+    clientX: number;
+    clientY: number;
+  } | null>(null);
+  const dragFrameRef = useRef<number | null>(null);
   const boardRef = useRef<HTMLDivElement | null>(null);
   const pocketRef = useRef<HTMLButtonElement | null>(null);
   const clearTimerRef = useRef<number | null>(null);
@@ -1478,6 +1485,8 @@ export default function App() {
       latest.selectedSource ?? getFirstAvailableSource(latest.tray, latest.pocket)
     );
     setHoverCell(null);
+    dragSessionRef.current = null;
+    pendingDragPointerRef.current = null;
     setDragSession(null);
 
     if (phase === 'gameover') {
@@ -1490,30 +1499,48 @@ export default function App() {
   }, [undoStack, undoCharges, phase, showBanner]);
 
   const handleRechargeUndo = useCallback(async () => {
+    if (!monetization.noAdsBundlePurchased) {
+      showBanner('Preparing rewarded ad…', 'Connecting to Google AdMob');
+    }
     const res = await showRewardedAd('UNDO', {
       noAdsOwned: monetization.noAdsBundlePurchased,
     });
-    if (!res.rewarded) return;
+    if (!res.rewarded) {
+      showBanner('Rewarded ad unavailable', res.message ?? 'Please try again later.');
+      return;
+    }
     setUndoCharges((c) => c + 1);
     cozyAudio.playRewardChime();
     showBanner('+1 Undo Rewarded', res.skippedAsVip ? 'VIP Ad-Free' : undefined);
   }, [monetization.noAdsBundlePurchased, showBanner]);
 
   const handleRewardRotate = useCallback(async () => {
+    if (!monetization.noAdsBundlePurchased) {
+      showBanner('Preparing rewarded ad…', 'Connecting to Google AdMob');
+    }
     const res = await showRewardedAd('ROTATE', {
       noAdsOwned: monetization.noAdsBundlePurchased,
     });
-    if (!res.rewarded) return;
+    if (!res.rewarded) {
+      showBanner('Rewarded ad unavailable', res.message ?? 'Please try again later.');
+      return;
+    }
     setRotateCharges((c) => c + 1);
     cozyAudio.playRewardChime();
     showBanner('+1 Rotate Rewarded', res.skippedAsVip ? 'VIP Ad-Free' : undefined);
   }, [monetization.noAdsBundlePurchased, showBanner]);
 
   const handleReviveClear3x3 = useCallback(async () => {
+    if (!monetization.noAdsBundlePurchased) {
+      showBanner('Preparing rewarded ad…', 'Loading the Garden Rescue reward');
+    }
     const res = await showRewardedAd('REVIVE_CLEAR_3X3', {
       noAdsOwned: monetization.noAdsBundlePurchased,
     });
-    if (!res.rewarded) return;
+    if (!res.rewarded) {
+      showBanner('Rewarded ad unavailable', res.message ?? 'Please try again later.');
+      return;
+    }
 
     const { nextGrid, clearedCells } = applyReviveClear3x3(grid);
     const bursts: ClearedParticleBurst[] = clearedCells.map((cell) => ({
@@ -1586,21 +1613,29 @@ export default function App() {
 
   const handleDoubleVictoryStars = useCallback(async () => {
     if (starsDoubledThisRun) return;
+    if (!monetization.noAdsBundlePurchased) {
+      showBanner('Preparing rewarded ad…', 'Loading your double-stars reward');
+    }
     const res = await showRewardedAd('DOUBLE_STARS', {
       noAdsOwned: monetization.noAdsBundlePurchased,
     });
-    if (!res.rewarded) return;
+    if (!res.rewarded) {
+      showBanner('Rewarded ad unavailable', res.message ?? 'Please try again later.');
+      return;
+    }
     const diffMeta = getLevelDifficultyMeta(activeLevelDef);
     const extra = starsAwardedThisRun * diffMeta.starMultiplier + bonusStarsEarned;
     setCozyStars((s) => s + extra);
     setStarsDoubledThisRun(true);
     cozyAudio.playRewardChime();
+    showBanner('Cozy Stars doubled!', res.skippedAsVip ? 'VIP Ad-Free' : 'Reward added');
   }, [
     starsDoubledThisRun,
     monetization.noAdsBundlePurchased,
     activeLevelDef,
     starsAwardedThisRun,
     bonusStarsEarned,
+    showBanner,
   ]);
 
   const openShop = useCallback((tab: ShopTabId = 'bundles') => {
@@ -1750,7 +1785,10 @@ export default function App() {
       noAdsOwned: monetization.noAdsBundlePurchased,
     });
     if (!res.rewarded) {
-      return { ok: false, message: 'Ad cancelled before reward completed.' };
+      return {
+        ok: false,
+        message: res.message ?? 'The rewarded ad was not completed. No gems were added.',
+      };
     }
     setCozyGems((g) => grantFreeAdGems(g, FREE_GEMS_AD_AMOUNT));
     cozyAudio.playRewardChime();
@@ -1978,7 +2016,9 @@ export default function App() {
       adConsentStatus: res.consentObtained ? 'obtained' : 'unknown',
     }));
     if (res.error) {
-      return 'Ad privacy could not be refreshed. Ads remain disabled.';
+      return res.error.includes('available in the installed Android app')
+        ? res.error
+        : 'Ad privacy could not be refreshed. Ads remain disabled. Check your connection and retry.';
     }
     if (res.canRequestAds) {
       return 'Ad privacy choices checked. Google permits ad requests.';
@@ -1988,59 +2028,109 @@ export default function App() {
       : 'Ad privacy controls are available in the installed Android app.';
   }, []);
 
-  // Global Pointer listeners for fluid drag-and-drop
+  // Keep callback refs fresh without re-registering window listeners on
+  // every drag coordinate update.
+  const dragActionsRef = useRef({
+    checkIsOverPocket,
+    computeBoardAnchor,
+    commitPlacement,
+    moveTrayPieceToPocket,
+  });
+  dragActionsRef.current = {
+    checkIsOverPocket,
+    computeBoardAnchor,
+    commitPlacement,
+    moveTrayPieceToPocket,
+  };
+
+  // Global Pointer listeners are registered once. Pointermove events are
+  // coalesced to one state update per animation frame, avoiding listener churn
+  // and repeated React renders on high-rate touchscreens.
   useEffect(() => {
-    if (!dragSession) return;
+    const clearPendingDragFrame = () => {
+      if (dragFrameRef.current !== null) {
+        window.cancelAnimationFrame(dragFrameRef.current);
+        dragFrameRef.current = null;
+      }
+      pendingDragPointerRef.current = null;
+    };
 
     const handlePointerMove = (e: PointerEvent) => {
-      if (e.pointerId !== dragSession.pointerId) return;
-      const dx = e.clientX - dragSession.startX;
-      const dy = e.clientY - dragSession.startY;
-      const moved = dragSession.hasMoved || Math.hypot(dx, dy) > 6;
+      const active = dragSessionRef.current;
+      if (!active || e.pointerId !== active.pointerId) return;
 
-      setDragSession((prev) =>
-        prev
-          ? {
-              ...prev,
-              clientX: e.clientX,
-              clientY: e.clientY,
-              hasMoved: moved,
-            }
-          : null
-      );
+      pendingDragPointerRef.current = {
+        pointerId: e.pointerId,
+        clientX: e.clientX,
+        clientY: e.clientY,
+      };
+      if (dragFrameRef.current !== null) return;
 
-      if (moved && dragSession.source.kind === 'tray') {
-        setIsOverPocket(
-          checkIsOverPocket(e.clientX, e.clientY, dragSession.pointerType)
-        );
-      } else {
-        setIsOverPocket(false);
-      }
+      dragFrameRef.current = window.requestAnimationFrame(() => {
+        dragFrameRef.current = null;
+        const point = pendingDragPointerRef.current;
+        const current = dragSessionRef.current;
+        if (!point || !current || point.pointerId !== current.pointerId) return;
+
+        const moved =
+          current.hasMoved ||
+          Math.hypot(
+            point.clientX - current.startX,
+            point.clientY - current.startY
+          ) > 6;
+        const next: DragSession = {
+          ...current,
+          clientX: point.clientX,
+          clientY: point.clientY,
+          hasMoved: moved,
+        };
+        dragSessionRef.current = next;
+        setDragSession(next);
+
+        if (moved && current.source.kind === 'tray') {
+          setIsOverPocket(
+            dragActionsRef.current.checkIsOverPocket(
+              point.clientX,
+              point.clientY,
+              current.pointerType
+            )
+          );
+        } else {
+          setIsOverPocket(false);
+        }
+      });
     };
 
     const handlePointerEnd = (e: PointerEvent) => {
-      if (e.pointerId !== dragSession.pointerId) return;
+      const current = dragSessionRef.current;
+      if (!current || e.pointerId !== current.pointerId) return;
+      clearPendingDragFrame();
 
-      if (!dragSession.hasMoved) {
-        setSelectedSource(dragSession.source);
+      const moved =
+        current.hasMoved ||
+        Math.hypot(e.clientX - current.startX, e.clientY - current.startY) > 6;
+
+      if (!moved) {
+        setSelectedSource(current.source);
       } else {
+        const actions = dragActionsRef.current;
         const overPocket =
-          dragSession.source.kind === 'tray' &&
-          checkIsOverPocket(e.clientX, e.clientY, dragSession.pointerType);
+          current.source.kind === 'tray' &&
+          actions.checkIsOverPocket(e.clientX, e.clientY, current.pointerType);
 
-        if (overPocket && dragSession.source.kind === 'tray') {
-          moveTrayPieceToPocket(dragSession.source.index);
+        if (overPocket && current.source.kind === 'tray') {
+          actions.moveTrayPieceToPocket(current.source.index);
         } else {
-          const anchor = computeBoardAnchor(
-            dragSession.piece,
+          const anchor = actions.computeBoardAnchor(
+            current.piece,
             e.clientX,
             e.clientY,
-            dragSession.pointerType
+            current.pointerType
           );
           if (anchor) {
-            commitPlacement(
-              dragSession.source,
-              dragSession.piece,
+            actions.commitPlacement(
+              current.source,
+              current.piece,
               anchor.anchorRow,
               anchor.anchorCol
             );
@@ -2048,33 +2138,31 @@ export default function App() {
         }
       }
 
+      dragSessionRef.current = null;
       setDragSession(null);
       setIsOverPocket(false);
     };
 
     const handleWindowBlur = () => {
+      clearPendingDragFrame();
+      dragSessionRef.current = null;
       setDragSession(null);
       setIsOverPocket(false);
     };
 
-    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointermove', handlePointerMove, { passive: true });
     window.addEventListener('pointerup', handlePointerEnd);
     window.addEventListener('pointercancel', handlePointerEnd);
     window.addEventListener('blur', handleWindowBlur);
 
     return () => {
+      clearPendingDragFrame();
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerEnd);
       window.removeEventListener('pointercancel', handlePointerEnd);
       window.removeEventListener('blur', handleWindowBlur);
     };
-  }, [
-    dragSession,
-    checkIsOverPocket,
-    computeBoardAnchor,
-    commitPlacement,
-    moveTrayPieceToPocket,
-  ]);
+  }, []);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -2303,7 +2391,7 @@ export default function App() {
       e.preventDefault();
       triggerHaptic('light');
       cozyAudio.playPickup(piece.material);
-      setDragSession({
+      const nextDragSession: DragSession = {
         source,
         piece,
         pointerId: e.pointerId,
@@ -2313,7 +2401,10 @@ export default function App() {
         clientX: e.clientX,
         clientY: e.clientY,
         hasMoved: false,
-      });
+      };
+      dragSessionRef.current = nextDragSession;
+      pendingDragPointerRef.current = null;
+      setDragSession(nextDragSession);
     },
     [phase]
   );
