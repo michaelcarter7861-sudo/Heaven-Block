@@ -1,0 +1,39 @@
+name: Validate HavenBlocks
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches:
+      - fix/admob-ump-and-reward-validation
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: TypeScript check
+        run: npm run lint
+
+      - name: Game logic tests
+        run: npm test
+
+      - name: Production web build
+        run: npm run build
+        env:
+          VITE_ADMOB_REWARDED_ID: ${{ secrets.ADMOB_REWARDED_AD_ID }}
