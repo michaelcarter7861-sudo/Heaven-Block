@@ -91,8 +91,13 @@ export async function requestAdConsent(options?: {
     };
   }
 
-  // Serialize overlapping startup / Settings requests so two UMP forms cannot race.
-  if (consentFlow) return consentFlow;
+  // Serialize overlapping startup / Settings requests. If Settings is opened
+  // during startup, wait for startup and then still honor the privacy-options action.
+  if (consentFlow) {
+    const pending = consentFlow;
+    const pendingResult = await pending;
+    if (!options?.showPrivacyOptions) return pendingResult;
+  }
 
   consentFlow = (async () => {
     try {
