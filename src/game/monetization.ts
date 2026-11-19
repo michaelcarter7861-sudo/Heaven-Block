@@ -9,6 +9,7 @@ export interface RewardedAdResult {
   rewarded: boolean;
   rewardType: AdRewardType;
   skippedAsVip: boolean;
+  message?: string;
 }
 
 export interface RewardedAdPreviewStatus {
@@ -482,9 +483,9 @@ export function cancelRewardedAd(): void {
 }
 
 /**
- * Clean, isolated async Play Store Rewarded Ad hook.
- * Automatically invokes native `@capacitor-community/admob` when available on Android/iOS,
- * or simulates a 2-second rewarded ad preview (or grants immediately when No-Ads is owned).
+ * Clean, isolated async rewarded-ad hook.
+ * Native builds use Google AdMob. A two-second preview is available only in
+ * Vite development mode. Production web builds never simulate a paid ad.
  */
 export async function showRewardedAd(
   rewardType: AdRewardType,
@@ -500,11 +501,12 @@ export async function showRewardedAd(
 
   // Native production: only the real Google rewarded-ad result can grant a reward.
   if (isAdMobAvailable()) {
-    const rewarded = await showNativeRewardedAd();
+    const nativeResult = await showNativeRewardedAd();
     return {
-      rewarded,
+      rewarded: nativeResult.rewarded,
       rewardType,
       skippedAsVip: false,
+      message: nativeResult.message,
     };
   }
 
@@ -518,6 +520,7 @@ export async function showRewardedAd(
       rewarded: false,
       rewardType,
       skippedAsVip: false,
+      message: 'Rewarded ads are available in the installed Android app.',
     };
   }
 
