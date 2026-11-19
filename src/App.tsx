@@ -1977,9 +1977,15 @@ export default function App() {
       ...prev,
       adConsentStatus: res.consentObtained ? 'obtained' : 'unknown',
     }));
-    return res.canRequestAds
-      ? 'Google UMP ad privacy consent updated.'
-      : 'Native UMP consent not obtained in offline web mode (ads disabled).';
+    if (res.error) {
+      return 'Ad privacy could not be refreshed. Ads remain disabled.';
+    }
+    if (res.canRequestAds) {
+      return 'Ad privacy choices checked. Google permits ad requests.';
+    }
+    return isNativePlatform()
+      ? 'Ad consent is not available yet. Ads remain disabled.'
+      : 'Ad privacy controls are available in the installed Android app.';
   }, []);
 
   // Global Pointer listeners for fluid drag-and-drop
