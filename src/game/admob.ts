@@ -127,9 +127,7 @@ export async function requestAdConsent(options?: {
       }
 
       return {
-        consentObtained:
-          info.status === AdmobConsentStatus.OBTAINED ||
-          info.status === AdmobConsentStatus.NOT_REQUIRED,
+        consentObtained: Boolean(info.canRequestAds),
         canRequestAds: consentAllowsAds,
         privacyOptionsRequired,
         provider: 'ump_native' as const,
