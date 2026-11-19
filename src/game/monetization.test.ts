@@ -203,7 +203,7 @@ test('requestAdConsent and restorePlayStorePurchases return Play Store complianc
   const consent = await requestAdConsent();
   assert.equal(consent.consentObtained, false);
   assert.equal(consent.canRequestAds, false);
-  assert.equal(consent.provider, 'ump_offline_ready');
+  assert.equal(consent.provider, 'unavailable');
 
   const mon0 = createDefaultMonetizationState();
   const none = restorePlayStorePurchases(mon0);
