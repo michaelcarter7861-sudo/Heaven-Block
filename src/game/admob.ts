@@ -111,7 +111,7 @@ export async function requestAdConsent(options?: {
         info = await AdMob.requestConsentInfo();
         privacyOptionsRequired =
           info.privacyOptionsRequirementStatus ===
-          PrivacyOptionsRequirementStatus.REQUIRED;
+          'REQUIRED';
       }
 
       // A privacy-options form and an initial consent form serve different
@@ -123,7 +123,7 @@ export async function requestAdConsent(options?: {
         info = await AdMob.showConsentForm();
         privacyOptionsRequired =
           info.privacyOptionsRequirementStatus ===
-          PrivacyOptionsRequirementStatus.REQUIRED;
+          'REQUIRED';
       }
 
       consentAllowsAds = Boolean(info.canRequestAds);
