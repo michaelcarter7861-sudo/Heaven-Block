@@ -42,21 +42,10 @@ jobs:
       - name: 📦 Setup Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: 🔧 Install Game Dependencies
         run: npm install
-
-      - name: 📱 Install Capacitor & AdMob
-        run: |
-          npm install \
-            @capacitor/core \
-            @capacitor/android \
-            @capacitor/app \
-            @capacitor/status-bar \
-            @capacitor/splash-screen \
-            @capacitor-community/admob
-          npm install -D @capacitor/cli
 
       - name: 🏗️ Build Web Bundle
         run: npm run build
