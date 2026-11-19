@@ -944,6 +944,12 @@ export default function App() {
       setTrayWaveId((w) => w + 1);
       setSelectedSource({ kind: 'tray', index: 0 });
       setHoverCell(null);
+      dragSessionRef.current = null;
+      pendingDragPointerRef.current = null;
+      if (dragFrameRef.current !== null) {
+        window.cancelAnimationFrame(dragFrameRef.current);
+        dragFrameRef.current = null;
+      }
       setDragSession(null);
       setBanner(null);
       setAppView('puzzle');
