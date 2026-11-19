@@ -2089,7 +2089,7 @@ export default function App() {
         if (!moved) return;
         const deltaX = point.clientX - current.clientX;
         const deltaY = point.clientY - current.clientY;
-        if (current.hasMoved && deltaX * deltaX + deltaY * deltaY < 4) return;
+        if (current.hasMoved && deltaX * deltaX + deltaY * deltaY < 16) return;
 
         const next: DragSession = {
           ...current,

@@ -97,7 +97,7 @@ const MemoizedBoardCell = React.memo<MemoizedBoardCellProps>(({
       aria-label={'Board row ' + (r + 1) + ' column ' + (c + 1) + cellDescription}
       onClick={() => onCellClick(r, c)}
       className={[
-        'relative w-full h-full rounded-[6px] transition-transform duration-100 focus-visible:outline-2 focus-visible:outline-amber-500',
+        'relative w-full h-full rounded-[6px] focus-visible:outline-2 focus-visible:outline-amber-500',
         canTapToPlace && !cell ? 'cursor-pointer' : 'cursor-default',
         isLineClearHighlight
           ? 'bg-amber-200/80 dark:bg-amber-500/25 ring-2 ring-amber-400/90 dark:ring-amber-400/80 animate-clear-preview-shimmer'
@@ -210,6 +210,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           className="relative grid grid-cols-8 grid-rows-8 gap-1 sm:gap-1.5 w-full h-full p-1.5 rounded-xl
             bg-[#C9B18D] dark:bg-[#0D0A08]
             shadow-[inset_0_2px_6px_rgba(62,40,18,0.25)] dark:shadow-[inset_0_2px_8px_rgba(0,0,0,0.9)]"
+          style={{ contain: "layout paint style" }}
         >
 
           {grid.map((rowArr, r) =>
