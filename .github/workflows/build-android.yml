@@ -49,6 +49,9 @@ jobs:
       - name: 🔧 Install Game Dependencies
         run: npm install
 
+      - name: 🎨 Prepare Game Icon, Splash and PWA Assets
+        run: npm run prepare:assets
+
       - name: 🏗️ Build Web Bundle
         run: npm run build
         env:
@@ -58,6 +61,9 @@ jobs:
         run: npx cap add android
         env:
           CI: true
+
+      - name: 📱 Generate Native Android Icon and Splash Resources
+        run: npx capacitor-assets generate --android
 
       - name: ⚙️ Set Android SDK Versions
         run: |

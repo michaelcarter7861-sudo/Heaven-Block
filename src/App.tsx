@@ -2085,26 +2085,31 @@ export default function App() {
             point.clientX - current.startX,
             point.clientY - current.startY
           ) > 6;
+        // Ignore touch jitter until a drag is real, then skip sub-2px updates.
+        if (!moved) return;
+        const deltaX = point.clientX - current.clientX;
+        const deltaY = point.clientY - current.clientY;
+        if (current.hasMoved && deltaX * deltaX + deltaY * deltaY < 4) return;
+
         const next: DragSession = {
           ...current,
           clientX: point.clientX,
           clientY: point.clientY,
-          hasMoved: moved,
+          hasMoved: true,
         };
         dragSessionRef.current = next;
         setDragSession(next);
 
-        if (moved && current.source.kind === 'tray') {
-          setIsOverPocket(
-            dragActionsRef.current.checkIsOverPocket(
-              point.clientX,
-              point.clientY,
-              current.pointerType
-            )
+        const overPocket =
+          current.source.kind === 'tray' &&
+          dragActionsRef.current.checkIsOverPocket(
+            point.clientX,
+            point.clientY,
+            current.pointerType
           );
-        } else {
-          setIsOverPocket(false);
-        }
+        setIsOverPocket((previous) =>
+          previous === overPocket ? previous : overPocket
+        );
       });
     };
 

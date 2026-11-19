@@ -10,7 +10,8 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "test": "tsx --test src/game/*.test.ts",
-    "cap:sync": "npm run build && npx cap sync android"
+    "cap:sync": "npm run build && npx cap sync android",
+    "prepare:assets": "node scripts/prepare-capacitor-assets.mjs"
   },
   "dependencies": {
     "@fontsource/fraunces": "^5.3.0",
@@ -40,6 +41,8 @@
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
     "typescript": "^7.0.2",
-    "@capacitor/cli": "8.5.2"
+    "@capacitor/cli": "8.5.2",
+    "@capacitor/assets": "4.0.0",
+    "sharp": "0.35.5"
   }
 }

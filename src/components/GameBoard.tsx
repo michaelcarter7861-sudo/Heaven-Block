@@ -28,6 +28,123 @@ interface GameBoardProps {
   onCellClick: (row: number, col: number) => void;
 }
 
+const HOOK_TARGET_SET = new Set(LEVEL1_HOOK_TARGET_CELLS.map((pt) => String(pt.r) + '_' + String(pt.c)));
+
+
+type PreviewCellInfo = {
+  special?: PieceInstance['specialType'];
+  hasAcornGem?: boolean;
+};
+
+type BoardCellContent = Grid8x8[number][number];
+
+interface MemoizedBoardCellProps {
+  r: number;
+  c: number;
+  boardShape: BoardShapeId;
+  cell: BoardCellContent;
+  ghostInfo?: PreviewCellInfo;
+  showValidGhost: boolean;
+  showInvalidGhost: boolean;
+  isClearingNow: boolean;
+  isLineClearHighlight: boolean;
+  isHookTarget: boolean;
+  canTapToPlace: boolean;
+  previewMaterial: MaterialType | null;
+  tileSkin: TileSkinId;
+  onCellClick: (row: number, col: number) => void;
+}
+
+// Drag previews move every frame. Memoizing each cell prevents all 64 cells
+// from re-rendering when only the ghost-piece coordinates have changed.
+const MemoizedBoardCell = React.memo<MemoizedBoardCellProps>(({
+  r, c, boardShape, cell, ghostInfo, showValidGhost, showInvalidGhost,
+  isClearingNow, isLineClearHighlight, isHookTarget, canTapToPlace,
+  previewMaterial, tileSkin, onCellClick,
+}) => {
+  if (cell?.kind === 'blocked') {
+    return (
+      <div
+        data-testid={'cell-' + r + '-' + c}
+        data-cell-kind="blocked"
+        aria-label={'Architectural obstacle row ' + (r + 1) + ' column ' + (c + 1)}
+        className="relative w-full h-full rounded-[6px]"
+      >
+        <BlockedTile shape={boardShape} r={r} c={c} />
+        {showInvalidGhost && (
+          <div className="absolute inset-0 rounded-[6px] bg-rose-500/35 border-2 border-rose-500/80 pointer-events-none" aria-hidden="true" />
+        )}
+      </div>
+    );
+  }
+
+  const cellDescription = cell
+    ? cell.kind === 'moss'
+      ? ' overgrown moss obstacle'
+      : cell.kind === 'flower'
+        ? ' sprouted bloom flower'
+        : ' occupied by ' + cell.material
+    : isHookTarget
+      ? ' empty, recommended opening placement'
+      : ' empty';
+
+  return (
+    <button
+      type="button"
+      data-testid={'cell-' + r + '-' + c}
+      data-cell-kind={cell ? cell.kind : 'empty'}
+      data-first-move-target={isHookTarget ? 'true' : undefined}
+      aria-label={'Board row ' + (r + 1) + ' column ' + (c + 1) + cellDescription}
+      onClick={() => onCellClick(r, c)}
+      className={[
+        'relative w-full h-full rounded-[6px] transition-transform duration-100 focus-visible:outline-2 focus-visible:outline-amber-500',
+        canTapToPlace && !cell ? 'cursor-pointer' : 'cursor-default',
+        isLineClearHighlight
+          ? 'bg-amber-200/80 dark:bg-amber-500/25 ring-2 ring-amber-400/90 dark:ring-amber-400/80 animate-clear-preview-shimmer'
+          : isHookTarget
+            ? 'bg-amber-100/90 border-2 border-dashed border-amber-600/90 dark:bg-amber-500/20 dark:border-amber-400 animate-pulse'
+            : 'bg-[#E9DCC7] dark:bg-[#1E1712] dark:border dark:border-[#2C2119]',
+      ].join(' ')}
+      style={{
+        boxShadow: isLineClearHighlight
+          ? '0 0 12px rgba(245, 158, 11, 0.45)'
+          : 'inset 0 1px 2px rgba(56, 36, 16, 0.14)',
+      }}
+    >
+      {cell?.kind === 'moss' && <MossTile clearing={isClearingNow} />}
+      {cell?.kind === 'flower' && (
+        <FlowerTile clearing={isClearingNow} justSprouted={cell.justSprouted} />
+      )}
+      {cell?.kind === 'tile' && (
+        <ArtisanTile
+          material={cell.material}
+          tileSkin={tileSkin}
+          justPlaced={cell.justPlaced}
+          clearing={isClearingNow}
+          highlightClear={isLineClearHighlight}
+          special={cell.special}
+          hasAcornGem={cell.hasAcornGem}
+        />
+      )}
+      {!cell && showValidGhost && previewMaterial && (
+        <ArtisanTile
+          material={previewMaterial}
+          tileSkin={tileSkin}
+          ghost
+          highlightClear={isLineClearHighlight}
+          special={ghostInfo?.special}
+          hasAcornGem={ghostInfo?.hasAcornGem}
+          className="ring-2 ring-emerald-600/75 dark:ring-amber-300/80"
+        />
+      )}
+      {showInvalidGhost && (
+        <div className="absolute inset-0 rounded-[6px] bg-rose-500/30 border-2 border-rose-500/80 pointer-events-none" aria-hidden="true" />
+      )}
+    </button>
+  );
+});
+MemoizedBoardCell.displayName = 'MemoizedBoardCell';
+
 const PARTICLE_VECTORS = [
   { px: '-22px', py: '-24px' },
   { px: '22px', py: '-22px' },
@@ -50,11 +167,6 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   firstMoveHookActive = false,
   onCellClick,
 }) => {
-  const hookTargetSet = new Set(
-    firstMoveHookActive
-      ? LEVEL1_HOOK_TARGET_CELLS.map((pt) => `${pt.r}_${pt.c}`)
-      : []
-  );
   const previewCellInfo = new Map<
     string,
     { special?: PieceInstance['specialType']; hasAcornGem?: boolean }
@@ -99,116 +211,34 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             bg-[#C9B18D] dark:bg-[#0D0A08]
             shadow-[inset_0_2px_6px_rgba(62,40,18,0.25)] dark:shadow-[inset_0_2px_8px_rgba(0,0,0,0.9)]"
         >
+
           {grid.map((rowArr, r) =>
             rowArr.map((cell, c) => {
-              const key = `${r}_${c}`;
+              const key = String(r) + '_' + String(c);
               const ghostInfo = previewCellInfo.get(key);
               const isPreviewTarget = Boolean(ghostInfo);
-              const isClearingNow = clearingKeys.has(key);
               const isLineClearHighlight =
                 cell?.kind !== 'blocked' &&
                 (clearedRowSet.has(r) || clearedColSet.has(c));
 
-              const showValidGhost =
-                isPreviewTarget && preview?.valid && previewMaterial;
-              const showInvalidGhost = isPreviewTarget && preview && !preview.valid;
-
-              if (cell?.kind === 'blocked') {
-                return (
-                  <div
-                    key={key}
-                    data-testid={`cell-${r}-${c}`}
-                    data-cell-kind="blocked"
-                    aria-label={`Architectural obstacle row ${r + 1} column ${c + 1}`}
-                    className="relative w-full h-full rounded-[6px]"
-                  >
-                    <BlockedTile shape={boardShape} r={r} c={c} />
-                    {showInvalidGhost && (
-                      <div
-                        className="absolute inset-0 rounded-[6px] bg-rose-500/35 border-2 border-rose-500/80 pointer-events-none"
-                        aria-hidden="true"
-                      />
-                    )}
-                  </div>
-                );
-              }
-
-              const isHookTarget = !cell && hookTargetSet.has(key);
-
               return (
-                <button
+                <MemoizedBoardCell
                   key={key}
-                  type="button"
-                  data-testid={`cell-${r}-${c}`}
-                  data-cell-kind={cell ? cell.kind : 'empty'}
-                  data-first-move-target={isHookTarget ? 'true' : undefined}
-                  aria-label={`Board row ${r + 1} column ${c + 1}${
-                    cell
-                      ? cell.kind === 'moss'
-                        ? ' overgrown moss obstacle'
-                        : cell.kind === 'flower'
-                          ? ' sprouted bloom flower'
-                          : ` occupied by ${cell.material}`
-                      : isHookTarget
-                        ? ' empty, recommended opening placement'
-                        : ' empty'
-                  }`}
-                  onClick={() => onCellClick(r, c)}
-                  className={`relative w-full h-full rounded-[6px] transition-transform duration-100 focus-visible:outline-2 focus-visible:outline-amber-500 ${
-                    canTapToPlace && !cell ? 'cursor-pointer' : 'cursor-default'
-                  } ${
-                    isLineClearHighlight
-                      ? 'bg-amber-200/80 dark:bg-amber-500/25 ring-2 ring-amber-400/90 dark:ring-amber-400/80 animate-clear-preview-shimmer'
-                      : isHookTarget
-                        ? 'bg-amber-100/90 border-2 border-dashed border-amber-600/90 dark:bg-amber-500/20 dark:border-amber-400 animate-pulse'
-                        : 'bg-[#E9DCC7] dark:bg-[#1E1712] dark:border dark:border-[#2C2119]'
-                  }`}
-                  style={{
-                    boxShadow: isLineClearHighlight
-                      ? '0 0 12px rgba(245, 158, 11, 0.45)'
-                      : 'inset 0 1px 2px rgba(56, 36, 16, 0.14)',
-                  }}
-                >
-                  {cell?.kind === 'moss' && <MossTile clearing={isClearingNow} />}
-
-                  {cell?.kind === 'flower' && (
-                    <FlowerTile
-                      clearing={isClearingNow}
-                      justSprouted={cell.justSprouted}
-                    />
-                  )}
-
-                  {cell?.kind === 'tile' && (
-                    <ArtisanTile
-                      material={cell.material}
-                      tileSkin={tileSkin}
-                      justPlaced={cell.justPlaced}
-                      clearing={isClearingNow}
-                      highlightClear={isLineClearHighlight}
-                      special={cell.special}
-                      hasAcornGem={cell.hasAcornGem}
-                    />
-                  )}
-
-                  {!cell && showValidGhost && previewMaterial && (
-                    <ArtisanTile
-                      material={previewMaterial}
-                      tileSkin={tileSkin}
-                      ghost
-                      highlightClear={isLineClearHighlight}
-                      special={ghostInfo?.special}
-                      hasAcornGem={ghostInfo?.hasAcornGem}
-                      className="ring-2 ring-emerald-600/75 dark:ring-amber-300/80"
-                    />
-                  )}
-
-                  {showInvalidGhost && (
-                    <div
-                      className="absolute inset-0 rounded-[6px] bg-rose-500/30 border-2 border-rose-500/80 pointer-events-none"
-                      aria-hidden="true"
-                    />
-                  )}
-                </button>
+                  r={r}
+                  c={c}
+                  boardShape={boardShape}
+                  cell={cell}
+                  ghostInfo={ghostInfo}
+                  showValidGhost={Boolean(isPreviewTarget && preview?.valid && previewMaterial)}
+                  showInvalidGhost={Boolean(isPreviewTarget && preview && !preview.valid)}
+                  isClearingNow={clearingKeys.has(key)}
+                  isLineClearHighlight={isLineClearHighlight}
+                  isHookTarget={Boolean(!cell && firstMoveHookActive && HOOK_TARGET_SET.has(key))}
+                  canTapToPlace={canTapToPlace}
+                  previewMaterial={previewMaterial}
+                  tileSkin={tileSkin}
+                  onCellClick={onCellClick}
+                />
               );
             })
           )}
