@@ -25,18 +25,19 @@ import {
 } from './monetization';
 import { applyReviveClear3x3, createEmptyGrid } from './solver';
 
-test('showRewardedAd emits preview status and grants reward after timer or VIP skip', async () => {
+test('production/non-native rewarded ads fail closed while VIP rewards remain available', async () => {
   const seenStates: string[] = [];
   const unsub = subscribeRewardedAd((status) => {
     seenStates.push(status ? status.rewardType : 'closed');
   });
 
-  const standardResult = await showRewardedAd('UNDO', { durationMs: 60 });
-  assert.equal(standardResult.rewarded, true);
-  assert.equal(standardResult.rewardType, 'UNDO');
-  assert.equal(standardResult.skippedAsVip, false);
-  assert.ok(seenStates.includes('UNDO'));
-  assert.equal(seenStates[seenStates.length - 1], 'closed');
+  // Node test runs do not have Vite DEV mode or a native AdMob runtime.
+  // They must never receive a simulated reward.
+  const unavailableResult = await showRewardedAd('UNDO', { durationMs: 60 });
+  assert.equal(unavailableResult.rewarded, false);
+  assert.equal(unavailableResult.rewardType, 'UNDO');
+  assert.equal(unavailableResult.skippedAsVip, false);
+  assert.deepEqual(seenStates, []);
 
   const vipResult = await showRewardedAd('DOUBLE_STARS', { noAdsOwned: true });
   assert.equal(vipResult.rewarded, true);
