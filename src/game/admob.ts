@@ -113,7 +113,11 @@ export async function requestAdConsent(options?: {
         privacyOptionsRequired =
           info.privacyOptionsRequirementStatus ===
           PrivacyOptionsRequirementStatus.REQUIRED;
-      } else if (
+      }
+
+      // A privacy-options form and an initial consent form serve different
+      // purposes. If UMP still reports consent REQUIRED, present that form too.
+      if (
         info.isConsentFormAvailable &&
         info.status === AdmobConsentStatus.REQUIRED
       ) {
