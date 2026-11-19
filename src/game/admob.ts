@@ -13,10 +13,6 @@ const viteEnv = (
 const GOOGLE_TEST_REWARDED_AD_UNIT_ID =
   'ca-app-pub-3940256099942544/5224354917';
 
-/**
- * Production builds must receive the real ad-unit ID through
- * VITE_ADMOB_REWARDED_ID. The Google sample ID is used only in Vite dev mode.
- */
 export const REWARDED_AD_UNIT_ID =
   viteEnv?.VITE_ADMOB_REWARDED_ID?.trim() ||
   (viteEnv?.DEV ? GOOGLE_TEST_REWARDED_AD_UNIT_ID : '');
@@ -29,10 +25,46 @@ export interface AdConsentResult {
   error?: string;
 }
 
+export interface NativeRewardedAdResult {
+  rewarded: boolean;
+  message?: string;
+}
+
 let initialized = false;
 let adReady = false;
 let consentAllowsAds = false;
 let consentFlow: Promise<AdConsentResult> | null = null;
+let preloadFlow: Promise<boolean> | null = null;
+let lastAdLoadMessage: string | null = null;
+let lastConsentMessage: string | null = null;
+
+function getNativeErrorText(error: unknown): string {
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object') {
+    const record = error as { message?: unknown; code?: unknown };
+    const message =
+      typeof record.message === 'string' ? record.message : '';
+    const code = record.code == null ? '' : String(record.code);
+    return [message, code].filter(Boolean).join(' ');
+  }
+  return '';
+}
+
+function getUserFacingAdError(error: unknown, stage: 'load' | 'show'): string {
+  const raw = getNativeErrorText(error).toLowerCase();
+  if (/no.?fill|no ads available|inventory/.test(raw)) {
+    return 'No rewarded ad is available right now. Please try again later.';
+  }
+  if (/network|internet|connection|timeout|unreachable/.test(raw)) {
+    return 'The ad could not connect. Check your internet connection and try again.';
+  }
+  if (/not loaded|not ready|already showing|invalid state/.test(raw)) {
+    return 'The rewarded ad is not ready yet. Please try again in a moment.';
+  }
+  return stage === 'load'
+    ? 'A rewarded ad could not be loaded. Please try again shortly.'
+    : 'The rewarded ad could not be opened. No reward was given.';
+}
 
 export function isAdMobAvailable(): boolean {
   return Capacitor.isNativePlatform();
@@ -48,26 +80,48 @@ async function initializeAdsSdk(): Promise<void> {
   initialized = true;
 }
 
-export async function preloadRewardedAd(): Promise<void> {
+/**
+ * Load a rewarded ad once at a time. The boolean result is also used by the
+ * click path, so a failed load can be reported to the player instead of silently
+ * returning without feedback.
+ */
+export async function preloadRewardedAd(): Promise<boolean> {
   if (!isAdMobAvailable() || !consentAllowsAds || !initialized) {
     adReady = false;
-    return;
+    return false;
   }
 
   if (!REWARDED_AD_UNIT_ID) {
     adReady = false;
-    console.error(
-      '[AdMob] Missing VITE_ADMOB_REWARDED_ID. Refusing to request a production ad.'
-    );
-    return;
+    lastAdLoadMessage =
+      'The rewarded ad unit is not configured in this build. Please update the app.';
+    console.error('[AdMob] Missing VITE_ADMOB_REWARDED_ID.');
+    return false;
   }
 
+  if (adReady) return true;
+  if (preloadFlow) return preloadFlow;
+
+  const currentLoad = (async () => {
+    try {
+      await AdMob.prepareRewardVideoAd({ adId: REWARDED_AD_UNIT_ID });
+      adReady = true;
+      lastAdLoadMessage = null;
+      console.info('[AdMob] Rewarded ad loaded:', REWARDED_AD_UNIT_ID);
+      return true;
+    } catch (error) {
+      adReady = false;
+      lastAdLoadMessage = getUserFacingAdError(error, 'load');
+      console.warn('[AdMob] Rewarded ad preload failed:', error);
+      return false;
+    }
+  })();
+
+  preloadFlow = currentLoad;
   try {
-    await AdMob.prepareRewardVideoAd({ adId: REWARDED_AD_UNIT_ID });
-    adReady = true;
-  } catch (error) {
-    adReady = false;
-    console.warn('[AdMob] Rewarded ad preload failed:', error);
+    return await currentLoad;
+  } finally {
+    if (preloadFlow === currentLoad) preloadFlow = null;
   }
 }
 
@@ -82,11 +136,14 @@ export async function requestAdConsent(options?: {
   if (!isAdMobAvailable()) {
     consentAllowsAds = false;
     adReady = false;
+    lastConsentMessage =
+      'Ad privacy controls are available in the installed Android app.';
     return {
       consentObtained: false,
       canRequestAds: false,
       privacyOptionsRequired: false,
       provider: 'unavailable',
+      error: lastConsentMessage,
     };
   }
 
@@ -102,55 +159,54 @@ export async function requestAdConsent(options?: {
     try {
       let info = await AdMob.requestConsentInfo();
       let privacyOptionsRequired =
-        info.privacyOptionsRequirementStatus ===
-        'REQUIRED';
+        info.privacyOptionsRequirementStatus === 'REQUIRED';
 
       if (options?.showPrivacyOptions && privacyOptionsRequired) {
         await AdMob.showPrivacyOptionsForm();
-        // Re-read the UMP state after the user closes the privacy options form.
         info = await AdMob.requestConsentInfo();
         privacyOptionsRequired =
-          info.privacyOptionsRequirementStatus ===
-          'REQUIRED';
+          info.privacyOptionsRequirementStatus === 'REQUIRED';
       }
 
-      // A privacy-options form and an initial consent form serve different
-      // purposes. If UMP still reports consent REQUIRED, present that form too.
       if (
         info.isConsentFormAvailable &&
         info.status === AdmobConsentStatus.REQUIRED
       ) {
         info = await AdMob.showConsentForm();
         privacyOptionsRequired =
-          info.privacyOptionsRequirementStatus ===
-          'REQUIRED';
+          info.privacyOptionsRequirementStatus === 'REQUIRED';
       }
 
       consentAllowsAds = Boolean(info.canRequestAds);
       if (consentAllowsAds) {
+        lastConsentMessage = null;
         await initializeAdsSdk();
+        // Preload failure does not invalidate consent; the next tap can retry.
         await preloadRewardedAd();
       } else {
         adReady = false;
+        lastConsentMessage =
+          'Google has not enabled ad requests yet. Complete the privacy consent step in Settings and try again.';
       }
 
       return {
-        consentObtained: Boolean(info.canRequestAds),
+        consentObtained: consentAllowsAds,
         canRequestAds: consentAllowsAds,
         privacyOptionsRequired,
         provider: 'ump_native' as const,
       };
     } catch (error) {
-      // Fail closed: a UMP/network/plugin error must never enable ad requests.
       consentAllowsAds = false;
       adReady = false;
+      lastConsentMessage =
+        'Google privacy consent could not be checked. Check your connection, then retry in Settings.';
       console.warn('[AdMob] UMP consent flow failed; ads remain disabled:', error);
       return {
         consentObtained: false,
         canRequestAds: false,
         privacyOptionsRequired: false,
         provider: 'ump_native' as const,
-        error: error instanceof Error ? error.message : String(error),
+        error: getNativeErrorText(error) || lastConsentMessage,
       };
     } finally {
       consentFlow = null;
@@ -166,41 +222,86 @@ export async function initAdMob(): Promise<AdConsentResult> {
 }
 
 /**
- * Show one native rewarded ad. The plugin's resolved reward item is the sole
- * authority for granting the in-game reward; dismissal or load/show failure
- * returns false. No timer or browser simulation is reachable from this method.
+ * Show a prepared native rewarded ad. Failure is returned with a concise
+ * player-facing message; the raw native error remains in Logcat/console.
+ * The plugin promise resolves with the reward only after the user earns it.
  */
-export async function showNativeRewardedAd(): Promise<boolean> {
-  if (
-    !isAdMobAvailable() ||
-    !consentAllowsAds ||
-    !initialized ||
-    !REWARDED_AD_UNIT_ID
-  ) {
-    return false;
+export async function showNativeRewardedAd(): Promise<NativeRewardedAdResult> {
+  if (!isAdMobAvailable()) {
+    return {
+      rewarded: false,
+      message: 'Rewarded ads are available in the installed Android app.',
+    };
+  }
+
+  // A player may tap before the startup consent request has completed.
+  if (!consentAllowsAds && consentFlow) {
+    await consentFlow;
+  }
+
+  if (!consentAllowsAds) {
+    return {
+      rewarded: false,
+      message:
+        lastConsentMessage ??
+        'Ad privacy consent is not complete. Open Settings → Ad Privacy & Consent.',
+    };
+  }
+
+  if (!initialized) {
+    return {
+      rewarded: false,
+      message: 'The ad service is still starting. Please try again in a moment.',
+    };
+  }
+
+  if (!REWARDED_AD_UNIT_ID) {
+    return {
+      rewarded: false,
+      message:
+        'The rewarded ad unit is missing from this build. Please install the latest app update.',
+    };
   }
 
   if (!adReady) {
-    await preloadRewardedAd();
+    const loaded = await preloadRewardedAd();
+    if (!loaded) {
+      return {
+        rewarded: false,
+        message:
+          lastAdLoadMessage ??
+          'No rewarded ad is ready right now. Please try again later.',
+      };
+    }
   }
-  if (!adReady) return false;
 
   try {
-    const reward = await AdMob.showRewardVideoAd();
+    const reward = await AdMob.showRewardVideoAd({
+      adId: REWARDED_AD_UNIT_ID,
+    });
     adReady = false;
 
-    // The plugin resolves with the earned reward item. Do not also grant from
-    // the Rewarded event: that would double-credit the same completed ad.
     const amount = Number(reward?.amount);
     const type = String(reward?.type ?? '').trim();
     const earned = Number.isFinite(amount) && amount > 0 && type.length > 0;
 
+    if (!earned) {
+      console.warn('[AdMob] Rewarded ad closed without a valid reward item:', reward);
+      void preloadRewardedAd();
+      return {
+        rewarded: false,
+        message: 'The ad ended without a confirmed reward. No game currency was added.',
+      };
+    }
+
+    console.info('[AdMob] Reward earned:', { amount, type });
     void preloadRewardedAd();
-    return earned;
+    return { rewarded: true };
   } catch (error) {
     adReady = false;
+    const message = getUserFacingAdError(error, 'show');
     console.warn('[AdMob] Rewarded ad was not completed:', error);
     void preloadRewardedAd();
-    return false;
+    return { rewarded: false, message };
   }
 }
