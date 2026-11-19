@@ -276,8 +276,25 @@ export function normalizePersistedState(
             typeof parsed.lifetimeStats.totalStoryWins === 'number'
               ? Math.max(0, Math.floor(parsed.lifetimeStats.totalStoryWins))
               : 0,
+          bestFireflyStreak: Math.max(
+            typeof parsed.fireflyStreak === 'number'
+              ? Math.max(0, Math.min(5, Math.floor(parsed.fireflyStreak)))
+              : 0,
+            typeof parsed.lifetimeStats.bestFireflyStreak === 'number'
+              ? Math.max(
+                  0,
+                  Math.min(5, Math.floor(parsed.lifetimeStats.bestFireflyStreak))
+                )
+              : 0
+          ),
         }
-      : createDefaultLifetimeStats(),
+      : {
+          ...createDefaultLifetimeStats(),
+          bestFireflyStreak:
+            typeof parsed.fireflyStreak === 'number'
+              ? Math.max(0, Math.min(5, Math.floor(parsed.fireflyStreak)))
+              : 0,
+        },
     claimedMilestones: Array.isArray(parsed.claimedMilestones)
       ? Array.from(
           new Set(

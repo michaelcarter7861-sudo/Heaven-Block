@@ -33,6 +33,7 @@ export function createDefaultLifetimeStats(): LifetimeStats {
     totalBlocksPlaced: 0,
     totalAcornGems: 0,
     totalStoryWins: 0,
+    bestFireflyStreak: 0,
   };
 }
 
@@ -194,7 +195,26 @@ export function buildDailyCalendarMonth(
   };
 }
 
-// ---------- Cozy Milestones / Achievements ----------
+// ---------- Haven Milestones / Collectible Achievement Badges ----------
+
+export type MilestoneCategory = 'gameplay' | 'haven' | 'collection';
+
+export type MilestoneBadgeTier = 'bronze' | 'silver' | 'gold' | 'heirloom';
+
+export type MilestoneBadgeIcon =
+  | 'sofa'
+  | 'flame'
+  | 'layers'
+  | 'timber'
+  | 'firefly_crown'
+  | 'compass'
+  | 'acorn'
+  | 'sun'
+  | 'calendar'
+  | 'home'
+  | 'palette'
+  | 'leaf'
+  | 'heart';
 
 export interface MilestoneProgressContext {
   lifetimeStats: LifetimeStats;
@@ -202,32 +222,69 @@ export interface MilestoneProgressContext {
   herbarium: HerbariumProgress;
   completedDailyDates: string[];
   petBond: PetBondState;
+  fireflyStreak?: number;
 }
 
 export interface CozyMilestoneDef {
   id: string;
   title: string;
+  featLabel: string;
+  badgeLabel: string;
   description: string;
+  category: MilestoneCategory;
+  badgeTier: MilestoneBadgeTier;
+  badgeIcon: MilestoneBadgeIcon;
   target: number;
   rewardGems: number;
   rewardSeedPacks: number;
   getCurrent: (ctx: MilestoneProgressContext) => number;
 }
 
+export function getBestFireflyStreak(ctx: MilestoneProgressContext): number {
+  return Math.max(
+    ctx.lifetimeStats.bestFireflyStreak ?? 0,
+    ctx.fireflyStreak ?? 0
+  );
+}
+
 export const COZY_MILESTONES: CozyMilestoneDef[] = [
   {
-    id: 'ms_first_furniture',
-    title: 'First Cozy Touch',
-    description: 'Restore your very first piece of furniture in My Haven',
-    target: 1,
-    rewardGems: 10,
-    rewardSeedPacks: 0,
-    getCurrent: (ctx) => countUnlockedFurniture(ctx.haven),
+    id: 'ms_lines_100',
+    title: '100 Lines Cleared',
+    featLabel: 'Master Timber Crafter',
+    badgeLabel: '100 Lines',
+    description: 'Clear 100 total lines across Story, Daily, or Endless Zen runs',
+    category: 'gameplay',
+    badgeTier: 'gold',
+    badgeIcon: 'timber',
+    target: 100,
+    rewardGems: 25,
+    rewardSeedPacks: 1,
+    getCurrent: (ctx) => ctx.lifetimeStats.totalLinesCleared,
+  },
+  {
+    id: 'ms_perfect_5_streak',
+    title: 'Perfect 5-Streak',
+    featLabel: 'Firefly Lantern Sovereign',
+    badgeLabel: '5-Streak',
+    description: 'Light all 5 Firefly Lanterns with 5 consecutive Story Mode victories',
+    category: 'gameplay',
+    badgeTier: 'heirloom',
+    badgeIcon: 'firefly_crown',
+    target: 5,
+    rewardGems: 30,
+    rewardSeedPacks: 1,
+    getCurrent: (ctx) => getBestFireflyStreak(ctx),
   },
   {
     id: 'ms_combo_artisan',
-    title: 'Combo Artisan',
+    title: '3× Combo Chain',
+    featLabel: 'Combo Artisan',
+    badgeLabel: '3× Combo',
     description: 'Reach a 3× combo chain in any puzzle mode',
+    category: 'gameplay',
+    badgeTier: 'silver',
+    badgeIcon: 'flame',
     target: 3,
     rewardGems: 15,
     rewardSeedPacks: 0,
@@ -235,44 +292,69 @@ export const COZY_MILESTONES: CozyMilestoneDef[] = [
   },
   {
     id: 'ms_lines_25',
-    title: 'Warm Hearth Weaver',
+    title: '25 Lines Cleared',
+    featLabel: 'Warm Hearth Weaver',
+    badgeLabel: '25 Lines',
     description: 'Clear 25 total lines across Story, Daily, or Zen runs',
+    category: 'gameplay',
+    badgeTier: 'bronze',
+    badgeIcon: 'layers',
     target: 25,
     rewardGems: 15,
     rewardSeedPacks: 0,
     getCurrent: (ctx) => ctx.lifetimeStats.totalLinesCleared,
   },
   {
-    id: 'ms_lines_100',
-    title: 'Master Timber Crafter',
-    description: 'Clear 100 total lines across all puzzle sessions',
-    target: 100,
-    rewardGems: 25,
-    rewardSeedPacks: 1,
-    getCurrent: (ctx) => ctx.lifetimeStats.totalLinesCleared,
+    id: 'ms_story_5',
+    title: '5 Story Victories',
+    featLabel: 'Cottage Pathfinder',
+    badgeLabel: '5 Wins',
+    description: 'Complete 5 Story Mode puzzle chapters',
+    category: 'gameplay',
+    badgeTier: 'silver',
+    badgeIcon: 'compass',
+    target: 5,
+    rewardGems: 20,
+    rewardSeedPacks: 0,
+    getCurrent: (ctx) => ctx.lifetimeStats.totalStoryWins,
   },
   {
-    id: 'ms_daily_1',
-    title: 'Morning Ritual',
-    description: 'Complete your first Daily Haven Puzzle',
+    id: 'ms_acorn_20',
+    title: '20 Acorn Gems',
+    featLabel: 'Acorn Gatherer',
+    badgeLabel: '20 Acorns',
+    description: 'Harvest 20 golden Acorn Gems from cleared puzzle lines',
+    category: 'gameplay',
+    badgeTier: 'silver',
+    badgeIcon: 'acorn',
+    target: 20,
+    rewardGems: 15,
+    rewardSeedPacks: 0,
+    getCurrent: (ctx) => ctx.lifetimeStats.totalAcornGems,
+  },
+  {
+    id: 'ms_first_furniture',
+    title: 'First Cozy Touch',
+    featLabel: 'Room Decorator',
+    badgeLabel: '1st Piece',
+    description: 'Restore your very first piece of furniture in My Haven',
+    category: 'haven',
+    badgeTier: 'bronze',
+    badgeIcon: 'sofa',
     target: 1,
     rewardGems: 10,
     rewardSeedPacks: 0,
-    getCurrent: (ctx) => ctx.completedDailyDates.length,
-  },
-  {
-    id: 'ms_daily_5',
-    title: 'Calendar Keeper',
-    description: 'Complete 5 Daily Haven Puzzles (at your own pace)',
-    target: 5,
-    rewardGems: 25,
-    rewardSeedPacks: 1,
-    getCurrent: (ctx) => ctx.completedDailyDates.length,
+    getCurrent: (ctx) => countUnlockedFurniture(ctx.haven),
   },
   {
     id: 'ms_room_restored_1',
     title: 'Home Sweet Haven',
+    featLabel: 'Chapter Architect',
+    badgeLabel: 'Full Room',
     description: 'Fully restore all 8 furniture pieces in any Cozy Room',
+    category: 'haven',
+    badgeTier: 'gold',
+    badgeIcon: 'home',
     target: 1,
     rewardGems: 30,
     rewardSeedPacks: 1,
@@ -281,29 +363,72 @@ export const COZY_MILESTONES: CozyMilestoneDef[] = [
   {
     id: 'ms_furniture_12',
     title: 'Interior Curator',
+    featLabel: '12 Restorations',
+    badgeLabel: '12 Pieces',
     description: 'Restore 12 total furniture pieces across your chapters',
+    category: 'haven',
+    badgeTier: 'gold',
+    badgeIcon: 'palette',
     target: 12,
     rewardGems: 25,
     rewardSeedPacks: 0,
     getCurrent: (ctx) => countUnlockedFurniture(ctx.haven),
   },
   {
-    id: 'ms_herbarium_12',
-    title: 'Botanical Archivist',
-    description: 'Collect 12 unique cards in the Herbarium Scrapbook',
-    target: 12,
-    rewardGems: 20,
-    rewardSeedPacks: 1,
-    getCurrent: (ctx) => ctx.herbarium.unlockedCardIds.length,
-  },
-  {
     id: 'ms_pet_bond_2',
     title: 'Kindred Spirits',
+    featLabel: 'Pet Bond Lv 2',
+    badgeLabel: 'Bond Lv 2',
     description: 'Reach Bond Level 2 with your Haven companion pet',
+    category: 'haven',
+    badgeTier: 'silver',
+    badgeIcon: 'heart',
     target: 2,
     rewardGems: 15,
     rewardSeedPacks: 0,
     getCurrent: (ctx) => ctx.petBond.level,
+  },
+  {
+    id: 'ms_daily_1',
+    title: 'Morning Ritual',
+    featLabel: 'First Daily Board',
+    badgeLabel: '1st Daily',
+    description: 'Complete your first Daily Haven Puzzle',
+    category: 'collection',
+    badgeTier: 'bronze',
+    badgeIcon: 'sun',
+    target: 1,
+    rewardGems: 10,
+    rewardSeedPacks: 0,
+    getCurrent: (ctx) => ctx.completedDailyDates.length,
+  },
+  {
+    id: 'ms_daily_5',
+    title: 'Calendar Keeper',
+    featLabel: '5 Daily Boards',
+    badgeLabel: '5 Dailies',
+    description: 'Complete 5 Daily Haven Puzzles (at your own pace)',
+    category: 'collection',
+    badgeTier: 'silver',
+    badgeIcon: 'calendar',
+    target: 5,
+    rewardGems: 25,
+    rewardSeedPacks: 1,
+    getCurrent: (ctx) => ctx.completedDailyDates.length,
+  },
+  {
+    id: 'ms_herbarium_12',
+    title: 'Botanical Archivist',
+    featLabel: '12 Herbarium Cards',
+    badgeLabel: '12 Cards',
+    description: 'Collect 12 unique cards in the Herbarium Scrapbook',
+    category: 'collection',
+    badgeTier: 'gold',
+    badgeIcon: 'leaf',
+    target: 12,
+    rewardGems: 20,
+    rewardSeedPacks: 1,
+    getCurrent: (ctx) => ctx.herbarium.unlockedCardIds.length,
   },
 ];
 
@@ -311,9 +436,18 @@ export interface EvaluatedMilestone {
   def: CozyMilestoneDef;
   current: number;
   target: number;
+  progressPct: number;
   completed: boolean;
   claimed: boolean;
   claimable: boolean;
+}
+
+export interface MilestoneBadgeSummary {
+  total: number;
+  unlocked: number;
+  claimed: number;
+  claimable: number;
+  completionPct: number;
 }
 
 export function evaluateMilestones(
@@ -325,15 +459,37 @@ export function evaluateMilestones(
     const current = Math.max(0, Math.floor(def.getCurrent(ctx)));
     const completed = current >= def.target;
     const claimed = claimedSet.has(def.id);
+    const progressPct =
+      def.target > 0 ? Math.min(100, Math.round((current / def.target) * 100)) : 100;
     return {
       def,
       current,
       target: def.target,
+      progressPct,
       completed,
       claimed,
       claimable: completed && !claimed,
     };
   });
+}
+
+export function summarizeMilestoneBadges(
+  evaluated: EvaluatedMilestone[]
+): MilestoneBadgeSummary {
+  const total = evaluated.length;
+  const unlocked = evaluated.filter((m) => m.completed).length;
+  const claimed = evaluated.filter((m) => m.claimed).length;
+  const claimable = evaluated.filter((m) => m.claimable).length;
+  const completionPct = total > 0 ? Math.round((unlocked / total) * 100) : 0;
+  return { total, unlocked, claimed, claimable, completionPct };
+}
+
+export function filterMilestonesByCategory(
+  evaluated: EvaluatedMilestone[],
+  category: 'all' | MilestoneCategory
+): EvaluatedMilestone[] {
+  if (category === 'all') return evaluated;
+  return evaluated.filter((m) => m.def.category === category);
 }
 
 export function countClaimableMilestones(

@@ -1226,7 +1226,8 @@ export default function App() {
           setCozyStars((s) => s + totalEarned);
           setCozyGems((g) => g + gemDrop);
           setUnlockedLevel((u) => Math.max(u, levelNumber + 1));
-          setFireflyStreak((st) => Math.min(5, st + 1));
+          const nextFireflyStreak = Math.min(5, fireflyStreak + 1);
+          setFireflyStreak(nextFireflyStreak);
           setLevelLosses((prev) => ({ ...prev, [levelNumber]: 0 }));
           setLevelStars((prev) => ({
             ...prev,
@@ -1240,6 +1241,10 @@ export default function App() {
           setLifetimeStats((prev) => ({
             ...prev,
             totalStoryWins: prev.totalStoryWins + 1,
+            bestFireflyStreak: Math.max(
+              prev.bestFireflyStreak ?? 0,
+              nextFireflyStreak
+            ),
           }));
           setSeedPackAwardedThisRun(earnedPack);
           setPetCelebrating(true);
@@ -1287,6 +1292,7 @@ export default function App() {
       haven.rooms.cottage_living?.sofa,
       firstSofaPromptDone,
       herbarium.storyWinsCount,
+      fireflyStreak,
       settings.screenShakeEnabled,
       showBanner,
       triggerGameOverState,
@@ -1597,8 +1603,9 @@ export default function App() {
       herbarium,
       completedDailyDates,
       petBond,
+      fireflyStreak,
     }),
-    [lifetimeStats, haven, herbarium, completedDailyDates, petBond]
+    [lifetimeStats, haven, herbarium, completedDailyDates, petBond, fireflyStreak]
   );
 
   const claimableMilestonesCount = useMemo(

@@ -177,6 +177,7 @@ export interface LifetimeStats {
   totalBlocksPlaced: number;
   totalAcornGems: number;
   totalStoryWins: number;
+  bestFireflyStreak?: number;
 }
 
 export type FurnitureSlotId =

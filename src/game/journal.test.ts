@@ -10,11 +10,13 @@ import {
   createDefaultLifetimeStats,
   createDefaultPetBondState,
   evaluateMilestones,
+  filterMilestonesByCategory,
   getUnlockedHavenMemories,
   giveDailyPetTreat,
   MONTHLY_TROPHY_THRESHOLDS,
   PET_BOND_XP_PER_LEVEL,
   PET_TREAT_DAILY_GEMS,
+  summarizeMilestoneBadges,
 } from './journal';
 
 test('Monthly Daily Calendar computes days, leading offset, and cumulative non-punitive trophy tiers', () => {
@@ -121,4 +123,54 @@ test('Cozy Milestones evaluate progress accurately, grant Gems/Seed Packs once, 
   );
   assert.equal(dupClaim.claimed, false);
   assert.equal(dupClaim.gemsEarned, 0);
+});
+
+test('Haven Milestones tracks 100 Lines Cleared, Perfect 5-Streak, category filters, and collectible badge summaries', () => {
+  const ctx = {
+    lifetimeStats: {
+      ...createDefaultLifetimeStats(),
+      totalLinesCleared: 108,
+      highestComboEver: 3,
+      totalStoryWins: 6,
+      totalAcornGems: 22,
+      bestFireflyStreak: 5,
+    },
+    haven: createDefaultHavenProgress(),
+    herbarium: createDefaultHerbariumProgress(),
+    completedDailyDates: [],
+    petBond: createDefaultPetBondState(),
+    // Even if active streak later drops to 0, peak bestFireflyStreak preserves Perfect 5-Streak!
+    fireflyStreak: 0,
+  };
+
+  const evaluated = evaluateMilestones(ctx, ['ms_lines_25']);
+  const lines100 = evaluated.find((m) => m.def.id === 'ms_lines_100');
+  const streak5 = evaluated.find((m) => m.def.id === 'ms_perfect_5_streak');
+
+  assert.equal(lines100?.def.title, '100 Lines Cleared');
+  assert.equal(lines100?.def.badgeTier, 'gold');
+  assert.equal(lines100?.completed, true);
+  assert.equal(lines100?.claimable, true);
+  assert.equal(lines100?.progressPct, 100);
+
+  assert.equal(streak5?.def.title, 'Perfect 5-Streak');
+  assert.equal(streak5?.def.badgeTier, 'heirloom');
+  assert.equal(streak5?.current, 5);
+  assert.equal(streak5?.completed, true);
+  assert.equal(streak5?.claimable, true);
+
+  const summary = summarizeMilestoneBadges(evaluated);
+  assert.equal(summary.total, evaluated.length);
+  assert.equal(summary.unlocked, 6); // all 6 gameplay feats unlocked
+  assert.equal(summary.claimed, 1); // ms_lines_25 claimed
+  assert.equal(summary.claimable, 5);
+
+  const gameplayOnly = filterMilestonesByCategory(evaluated, 'gameplay');
+  assert.equal(gameplayOnly.length, 6);
+  assert.ok(gameplayOnly.every((m) => m.def.category === 'gameplay'));
+
+  const claimStreak = claimMilestoneReward('ms_perfect_5_streak', ctx, ['ms_lines_25']);
+  assert.equal(claimStreak.claimed, true);
+  assert.equal(claimStreak.gemsEarned, 30);
+  assert.equal(claimStreak.seedPacksEarned, 1);
 });
