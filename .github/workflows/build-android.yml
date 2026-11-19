@@ -84,6 +84,112 @@ jobs:
           EOF
           fi
 
+      - name: 🔢 Set Android version from workflow run
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          build_file = Path("android/app/build.gradle")
+          if not build_file.exists():
+              build_file = Path("android/app/build.gradle.kts")
+          if not build_file.exists():
+              raise SystemExit("Android app Gradle file was not generated")
+
+          source = build_file.read_text()
+          build_number = int(os.environ["BUILD_NUMBER"])
+          source, code_count = re.subn(
+              r'(?m)^(\\s*versionCode\\s*(?:=\\s*)?)\\d+\\s*        run: node scripts/patch-manifest.js
+        env:
+          ADMOB_APP_ID: ${{ secrets.ADMOB_APP_ID }}
+
+      - name: 🔄 Sync Capacitor
+        run: npx cap sync android
+
+      - name: 💾 Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: ${{ runner.os }}-gradle-
+
+      - name: 🐛 Build Debug APK
+        if: github.event.inputs.build_type == 'debug'
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: 🔑 Decode Keystore
+        if: github.event.inputs.build_type != 'debug'
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.keystore
+
+      - name: 📦 Build Signed Release AAB
+        if: github.event.inputs.build_type != 'debug'
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew bundleRelease --no-daemon \
+            -Pandroid.injected.signing.store.file=${{ github.workspace }}/android/app/release.keystore \
+            -Pandroid.injected.signing.store.password=${{ secrets.KEYSTORE_PASSWORD }} \
+            -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} \
+            -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }}
+
+      - name: 📤 Upload Debug APK
+        if: github.event.inputs.build_type == 'debug'
+        uses: actions/upload-artifact@v4
+        with:
+          name: havenblocks-debug-${{ github.run_number }}.apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
+
+      - name: 📦 Build Signed Release APK
+        if: github.event.inputs.build_type != 'debug'
+        run: |
+          cd android
+          ./gradlew assembleRelease --no-daemon \
+            -Pandroid.injected.signing.store.file=${{ github.workspace }}/android/app/release.keystore \
+            -Pandroid.injected.signing.store.password=${{ secrets.KEYSTORE_PASSWORD }} \
+            -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} \
+            -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }}
+
+      - name: 📤 Upload Release APK
+        if: github.event.inputs.build_type != 'debug'
+        uses: actions/upload-artifact@v4
+        with:
+          name: havenblocks-release-v${{ github.run_number }}.apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 30
+
+      - name: 📤 Upload Release AAB
+        if: github.event.inputs.build_type != 'debug'
+        uses: actions/upload-artifact@v4
+        with:
+          name: havenblocks-release-v${{ github.run_number }}.aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 30
+,
+              lambda match: f"{match.group(1)}{build_number}",
+              source,
+              count=1,
+          )
+          source, name_count = re.subn(
+              r'(?m)^(\\s*versionName\\s*(?:=\\s*)?)[\"\'][^\"\']+[\"\']',
+              lambda match: f'{match.group(1)}"1.0.{build_number}"',
+              source,
+              count=1,
+          )
+          if code_count != 1 or name_count != 1:
+              raise SystemExit("Could not safely update Android versionCode/versionName")
+          build_file.write_text(source)
+          print(f"Android versionCode={build_number}, versionName=1.0.{build_number}")
+          PY
+
       - name: 💉 Inject AdMob App ID
         run: node scripts/patch-manifest.js
         env:
