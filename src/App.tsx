@@ -512,9 +512,20 @@ export default function App() {
     void hideNativeSplashScreen();
   }, []);
 
-  // AdMob initialize on Android native (no-op on web)
+  // Refresh UMP consent on every native app launch. The AdMob SDK and
+  // rewarded inventory are initialized only after UMP permits ad requests.
   useEffect(() => {
-    void initAdMob();
+    let active = true;
+    void initAdMob().then((consent) => {
+      if (!active) return;
+      setMonetization((prev) => ({
+        ...prev,
+        adConsentStatus: consent.canRequestAds ? 'obtained' : 'unknown',
+      }));
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Sync Tailwind dark class, reduced-motion preference, colorblind symbols, and Edge-to-Edge StatusBar chrome
