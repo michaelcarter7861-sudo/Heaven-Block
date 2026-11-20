@@ -476,6 +476,7 @@ export default function App() {
     null
   );
   const [dragSession, setDragSession] = useState<DragSession | null>(null);
+  const [dragPreviewAnchor, setDragPreviewAnchor] = useState<{ r: number; c: number } | null>(null);
   const [isOverPocket, setIsOverPocket] = useState<boolean>(false);
   const [clearingKeys, setClearingKeys] = useState<Set<string>>(new Set());
   const [particleBursts, setParticleBursts] = useState<ClearedParticleBurst[]>([]);
@@ -495,6 +496,9 @@ export default function App() {
   const dragFrameRef = useRef<number | null>(null);
   const boardRef = useRef<HTMLDivElement | null>(null);
   const pocketRef = useRef<HTMLButtonElement | null>(null);
+  const dragGhostRef = useRef<HTMLDivElement | null>(null);
+  const dragBoardRectRef = useRef<DOMRect | null>(null);
+  const dragPocketRectRef = useRef<DOMRect | null>(null);
   const clearTimerRef = useRef<number | null>(null);
   const particleTimerRef = useRef<number | null>(null);
   const lossRecordedRef = useRef<boolean>(false);
@@ -951,6 +955,9 @@ export default function App() {
         dragFrameRef.current = null;
       }
       setDragSession(null);
+      setDragPreviewAnchor(null);
+      dragBoardRectRef.current = null;
+      dragPocketRectRef.current = null;
       setBanner(null);
       setAppView('puzzle');
 
@@ -976,7 +983,7 @@ export default function App() {
     (piece: PieceInstance, clientX: number, clientY: number, pointerType: string) => {
       const boardEl = boardRef.current;
       if (!boardEl) return null;
-      const rect = boardEl.getBoundingClientRect();
+      const rect = dragBoardRectRef.current ?? boardEl.getBoundingClientRect();
       const yOffset =
         pointerType === 'touch' ? TOUCH_THUMB_Y_OFFSET : MOUSE_LIFT_Y_OFFSET;
 
@@ -1010,7 +1017,7 @@ export default function App() {
     (clientX: number, clientY: number, pointerType: string) => {
       const pocketEl = pocketRef.current;
       if (!pocketEl) return false;
-      const rect = pocketEl.getBoundingClientRect();
+      const rect = dragPocketRectRef.current ?? pocketEl.getBoundingClientRect();
       const yOffset = pointerType === 'touch' ? TOUCH_THUMB_Y_OFFSET * 0.4 : 0;
       const x = clientX;
       const y = clientY + yOffset;
@@ -1492,8 +1499,11 @@ export default function App() {
     );
     setHoverCell(null);
     dragSessionRef.current = null;
+    dragBoardRectRef.current = null;
+    dragPocketRectRef.current = null;
     pendingDragPointerRef.current = null;
     setDragSession(null);
+    setDragPreviewAnchor(null);
 
     if (phase === 'gameover') {
       document.body.dataset.state = 'playing';
@@ -2098,18 +2108,33 @@ export default function App() {
           hasMoved: true,
         };
         dragSessionRef.current = next;
-        setDragSession(next);
 
+        // Mount the drag ghost once; update its compositor transform directly.
+        // Avoid re-rendering the full game tree for every touch pointer frame.
+        if (!current.hasMoved) setDragSession(next);
+
+        const actions = dragActionsRef.current;
         const overPocket =
           current.source.kind === 'tray' &&
-          dragActionsRef.current.checkIsOverPocket(
-            point.clientX,
-            point.clientY,
-            current.pointerType
-          );
+          actions.checkIsOverPocket(point.clientX, point.clientY, current.pointerType);
         setIsOverPocket((previous) =>
           previous === overPocket ? previous : overPocket
         );
+
+        const anchor = overPocket
+          ? null
+          : actions.computeBoardAnchor(current.piece, point.clientX, point.clientY, current.pointerType);
+        setDragPreviewAnchor((previous) => {
+          if (previous?.r === anchor?.anchorRow && previous?.c === anchor?.anchorCol) return previous;
+          return anchor ? { r: anchor.anchorRow, c: anchor.anchorCol } : null;
+        });
+
+        const ghost = dragGhostRef.current;
+        if (ghost) {
+          const yOffset = current.pointerType === 'touch' ? TOUCH_THUMB_Y_OFFSET : MOUSE_LIFT_Y_OFFSET;
+          ghost.style.transform =
+            'translate3d(' + point.clientX + 'px, ' + (point.clientY + yOffset) + 'px, 0) translate(-50%, -50%) scale(1.04)';
+        }
       });
     };
 
@@ -2151,14 +2176,20 @@ export default function App() {
       }
 
       dragSessionRef.current = null;
+      dragBoardRectRef.current = null;
+      dragPocketRectRef.current = null;
       setDragSession(null);
+      setDragPreviewAnchor(null);
       setIsOverPocket(false);
     };
 
     const handleWindowBlur = () => {
       clearPendingDragFrame();
       dragSessionRef.current = null;
+      dragBoardRectRef.current = null;
+      dragPocketRectRef.current = null;
       setDragSession(null);
+      setDragPreviewAnchor(null);
       setIsOverPocket(false);
     };
 
@@ -2323,19 +2354,8 @@ export default function App() {
 
   const activePreview: PlacementPreview | null = useMemo(() => {
     if (dragSession && dragSession.hasMoved && !isOverPocket) {
-      const anchor = computeBoardAnchor(
-        dragSession.piece,
-        dragSession.clientX,
-        dragSession.clientY,
-        dragSession.pointerType
-      );
-      if (!anchor) return null;
-      return previewPlacement(
-        grid,
-        dragSession.piece.cells,
-        anchor.anchorRow,
-        anchor.anchorCol
-      );
+      if (!dragPreviewAnchor) return null;
+      return previewPlacement(grid, dragSession.piece.cells, dragPreviewAnchor.r, dragPreviewAnchor.c);
     }
 
     if (hoverCell && selectedSource) {
@@ -2347,8 +2367,8 @@ export default function App() {
     return null;
   }, [
     dragSession,
+    dragPreviewAnchor,
     isOverPocket,
-    computeBoardAnchor,
     grid,
     hoverCell,
     selectedSource,
@@ -2415,7 +2435,11 @@ export default function App() {
         hasMoved: false,
       };
       dragSessionRef.current = nextDragSession;
+      dragBoardRectRef.current = boardRef.current?.getBoundingClientRect() ?? null;
+      dragPocketRectRef.current = pocketRef.current?.getBoundingClientRect() ?? null;
       pendingDragPointerRef.current = null;
+      setDragPreviewAnchor(null);
+      setIsOverPocket(false);
       setDragSession(nextDragSession);
     },
     [phase]
@@ -3555,15 +3579,17 @@ export default function App() {
       {/* Floating Drag Ghost */}
       {dragSession && dragSession.hasMoved && (
         <div
-          className="fixed z-50 pointer-events-none"
+          ref={dragGhostRef}
+          className="fixed left-0 top-0 z-50 pointer-events-none"
           style={{
-            left: dragSession.clientX,
-            top:
-              dragSession.clientY +
-              (dragSession.pointerType === 'touch'
-                ? TOUCH_THUMB_Y_OFFSET
-                : MOUSE_LIFT_Y_OFFSET),
-            transform: 'translate(-50%, -50%) scale(1.04)',
+            transform:
+              'translate3d(' + dragSession.clientX + 'px, ' +
+              (dragSession.clientY +
+                (dragSession.pointerType === 'touch'
+                  ? TOUCH_THUMB_Y_OFFSET
+                  : MOUSE_LIFT_Y_OFFSET)) +
+              'px, 0) translate(-50%, -50%) scale(1.04)',
+            willChange: 'transform',
           }}
         >
           <PiecePreview

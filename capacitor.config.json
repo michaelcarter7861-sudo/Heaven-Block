@@ -1,6 +1,6 @@
 {
   "appId": "com.havenblocks.cozyroom",
-  "appName": "HavenBlocks: Cozy Room & Garden",
+  "appName": "HavenBlocks",
   "webDir": "dist",
   "bundledWebRuntime": false,
   "server": {

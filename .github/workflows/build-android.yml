@@ -64,6 +64,8 @@ jobs:
 
       - name: 📱 Generate Native Android Icon and Splash Resources
         run: npx capacitor-assets generate --android
+      - name: 🌿 Apply HeavenBlocks Adaptive Launcher Icon
+        run: node scripts/patch-android-branding.mjs
 
       - name: ⚙️ Set Android SDK Versions
         run: |
