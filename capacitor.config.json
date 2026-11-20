@@ -11,13 +11,13 @@
     "allowMixedContent": false,
     "captureInput": true,
     "webContentsDebuggingEnabled": false,
-    "backgroundColor": "#F6EFE4"
+    "backgroundColor": "#0B2418"
   },
   "plugins": {
     "SplashScreen": {
       "launchShowDuration": 1400,
       "launchAutoHide": false,
-      "backgroundColor": "#10291D",
+      "backgroundColor": "#0B2418",
       "androidSplashResourceName": "splash",
       "androidScaleType": "CENTER_CROP",
       "showSpinner": false,

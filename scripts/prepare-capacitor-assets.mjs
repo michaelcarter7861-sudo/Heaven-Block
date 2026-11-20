@@ -6,18 +6,31 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const assets = path.join(root, 'assets');
 const publicDir = path.join(root, 'public');
-const iconSvg = path.join(assets, 'icon-source.svg');
-const splashSvg = path.join(assets, 'splash-source.svg');
+const iconSource = path.join(assets, 'icon-master.jpg');
+const splashSource = path.join(assets, 'splash-source.jpg');
 const iconPng = path.join(assets, 'icon-only.png');
 const splashPng = path.join(assets, 'splash.png');
 
 await fs.mkdir(assets, { recursive: true });
 await fs.mkdir(publicDir, { recursive: true });
+await Promise.all([fs.access(iconSource), fs.access(splashSource)]);
 
-// Keep vector masters in Git; generate device-sized raster assets before each build.
+// Use the exact uploaded artwork as the icon source. Only the outer black
+// corner pixels are clipped so Android masks never expose a black square.
+const iconBase = await sharp(iconSource).resize(1024, 1024).png().toBuffer();
+const roundedMask = Buffer.from(
+  '<svg width="1024" height="1024" xmlns="http://www.w3.org/2000/svg">' +
+  '<rect width="1024" height="1024" rx="194" fill="#fff"/></svg>'
+);
 await Promise.all([
-  sharp(iconSvg).resize(1024, 1024).png({ compressionLevel: 9 }).toFile(iconPng),
-  sharp(splashSvg).resize(2732, 2732).png({ compressionLevel: 9 }).toFile(splashPng),
+  sharp(iconBase)
+    .composite([{ input: roundedMask, blend: 'dest-in' }])
+    .png({ compressionLevel: 9 })
+    .toFile(iconPng),
+  sharp(splashSource)
+    .resize(2732, 2732, { fit: 'cover', position: 'centre' })
+    .png({ compressionLevel: 9 })
+    .toFile(splashPng),
 ]);
 
 await Promise.all([
@@ -28,10 +41,10 @@ await Promise.all([
 
 const maskForeground = await sharp(iconPng).resize(410, 410).png().toBuffer();
 await sharp({
-  create: { width: 512, height: 512, channels: 3, background: { r: 24, g: 57, b: 38 } },
+  create: { width: 512, height: 512, channels: 3, background: { r: 11, g: 36, b: 24 } },
 })
   .composite([{ input: maskForeground, left: 51, top: 51 }])
   .png({ compressionLevel: 9 })
   .toFile(path.join(publicDir, 'pwa-maskable-512x512.png'));
 
-console.log('Generated 1024px launcher icon, 2732px native splash, and PWA icons.');
+console.log('Generated HavenBlocks woodland launcher icon, portrait-safe native splash, and PWA assets.');
