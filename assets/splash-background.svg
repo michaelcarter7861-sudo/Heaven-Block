@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2732" height="2732" viewBox="0 0 2732 2732">
+<defs>
+  <linearGradient id="forest" x1="0" y1="0" x2="0.9" y2="1">
+    <stop offset="0" stop-color="#173F2B"/><stop offset="0.55" stop-color="#0D2D1D"/><stop offset="1" stop-color="#061A11"/>
+  </linearGradient>
+  <radialGradient id="halo">
+    <stop offset="0" stop-color="#D5B46E" stop-opacity=".26"/><stop offset="1" stop-color="#D5B46E" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#F8E0A3"/><stop offset=".52" stop-color="#D5A85F"/><stop offset="1" stop-color="#9F6E35"/>
+  </linearGradient>
+  <filter id="soft"><feGaussianBlur stdDeviation="34"/></filter>
+</defs>
+<rect width="2732" height="2732" fill="url(#forest)"/>
+<circle cx="1366" cy="1150" r="1240" fill="url(#halo)"/>
+<circle cx="1366" cy="720" r="620" fill="#C8D98A" opacity=".045" filter="url(#soft)"/>
+<g fill="none" stroke="#7DA66D" stroke-width="22" opacity=".24" stroke-linecap="round">
+  <path d="M620 780 C500 490 660 270 905 130"/>
+  <path d="M2112 780 C2232 490 2072 270 1827 130"/>
+  <path d="M690 2030 C460 1900 400 1680 470 1480"/>
+  <path d="M2042 2030 C2272 1900 2332 1680 2262 1480"/>
+</g>
+<g fill="#9ABC78" opacity=".30">
+  <path d="M730 440 C520 315 500 175 622 98 C795 182 815 330 730 440Z"/>
+  <path d="M880 610 C720 560 655 430 715 325 C860 370 930 475 880 610Z"/>
+  <path d="M2002 440 C2212 315 2232 175 2110 98 C1937 182 1917 330 2002 440Z"/>
+  <path d="M1852 610 C2012 560 2077 430 2017 325 C1872 370 1802 475 1852 610Z"/>
+  <path d="M590 1785 C390 1730 300 1600 350 1495 C530 1505 640 1615 590 1785Z"/>
+  <path d="M2142 1785 C2342 1730 2432 1600 2382 1495 C2202 1505 2092 1615 2142 1785Z"/>
+</g>
+<g fill="#F0C978" opacity=".72">
+  <circle cx="745" cy="920" r="9"/><circle cx="1986" cy="900" r="8"/>
+  <circle cx="850" cy="1250" r="6"/><circle cx="1884" cy="1290" r="7"/>
+  <circle cx="1060" cy="410" r="7"/><circle cx="1668" cy="390" r="8"/>
+  <circle cx="690" cy="1560" r="6"/><circle cx="2040" cy="1540" r="6"/>
+</g>
+<rect x="750" y="350" width="1232" height="1810" rx="190" fill="#071E14" fill-opacity=".18" stroke="url(#gold)" stroke-width="14"/>
+<rect x="810" y="410" width="1112" height="1690" rx="160" fill="none" stroke="#F5DEA7" stroke-opacity=".13" stroke-width="3"/>
+<rect x="850" y="500" width="1032" height="1032" rx="190" fill="#224F36" fill-opacity=".48" stroke="#D1AC6D" stroke-opacity=".45" stroke-width="5"/>
+<g fill="none" stroke="#DEB978" stroke-linecap="round">
+  <path d="M1244 1775 H1488" stroke-width="12"/>
+  <path d="M1296 1775 H1436" stroke="#FFF0C6" stroke-width="3" opacity=".9"/>
+</g>
+<text x="1366" y="1890" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="57" fill="#FFF2D6" letter-spacing=".5">A cozy world, one block at a time</text>
+<text x="1366" y="2005" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="34" font-weight="700" fill="#C9D8B8" letter-spacing="4">COZY ROOM  •  GARDEN  •  PUZZLE</text>
+</svg>
