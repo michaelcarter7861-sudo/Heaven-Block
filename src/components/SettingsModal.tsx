@@ -1,3 +1,5 @@
+import { ENABLE_FULL_META } from '../game/features';
+import { isAdMobAvailable } from '../game/admob';
 import React, { useState } from 'react';
 import {
   Check,
@@ -284,6 +286,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           />
         </div>
 
+        <section className="rounded-xl border border-current/20 p-3 text-xs">
+          <h3 className="mb-1 font-bold">Verified Fair Solver</h3>
+          <p>New trays are checked for a playable path on your current board. The seed and your moves drive the run locally, with no score-based difficulty adjustment in Zen or Daily. Later choices can still leave you out of moves.</p>
+        </section>
+
         {/* 2. Backup / Restore Progress */}
         <div className="rounded-2xl p-3.5 mb-5 border bg-[#F3E9D8] border-[#D4C0A3] dark:bg-[#14100C] dark:border-[#33251B]">
           <div className="flex items-center justify-between gap-2 mb-2">
@@ -370,6 +377,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {/* 3. Play Store Legal, Consent, Purchase Restore & Local Data Deletion */}
         <div className="space-y-2">
+          {ENABLE_FULL_META && <>
           <button
             type="button"
             data-testid="restore-purchases-btn"
@@ -399,7 +407,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               {restorePurchaseMsg}
             </p>
           )}
+          </>}
 
+          {isAdMobAvailable() && <>
           <button
             type="button"
             data-testid="ad-consent-btn"
@@ -423,6 +433,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               {consentMsg}
             </p>
           )}
+          </>}
 
           <button
             type="button"

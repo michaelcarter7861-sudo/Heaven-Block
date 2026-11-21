@@ -137,23 +137,17 @@
 }
 
 @keyframes board-shake {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0);
-  }
-  18% {
-    transform: translate3d(-4px, 2px, 0);
-  }
-  36% {
-    transform: translate3d(4px, -3px, 0);
-  }
-  54% {
-    transform: translate3d(-3px, -2px, 0);
-  }
-  72% {
-    transform: translate3d(3px, 2px, 0);
-  }
+  0%, 100% { transform: translateX(0); }
+  30% { transform: translateX(-2px); }
+  65% { transform: translateX(2px); }
 }
+@keyframes board-shake-alt {
+  0%, 100% { transform: translateX(0); }
+  30% { transform: translateX(2px); }
+  65% { transform: translateX(-2px); }
+}
+.animate-board-shake-alt { animation: board-shake-alt 175ms ease-out; }
+
 
 @keyframes tray-slide-in {
   0% {
@@ -378,7 +372,7 @@
 }
 
 .animate-board-shake {
-  animation: board-shake 320ms cubic-bezier(0.36, 0.07, 0.19, 0.97);
+  animation: board-shake 175ms ease-out;
 }
 
 .animate-tray-slide {
@@ -405,6 +399,7 @@
   .animate-pet-tail-swish,
   .animate-firefly,
   .animate-sunbeam,
+  .animate-board-shake-alt,
   .animate-board-shake,
   .animate-tray-slide,
   .animate-particle-burst {
@@ -412,6 +407,7 @@
   }
 }
 
+.reduced-motion-pref .animate-board-shake-alt,
 .reduced-motion-pref .animate-board-shake,
 .reduced-motion-pref .animate-tile-pop,
 .reduced-motion-pref .animate-line-clear,

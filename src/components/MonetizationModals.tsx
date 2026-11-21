@@ -352,8 +352,8 @@ export const PrivacyTermsModal: React.FC<PrivacyTermsModalProps> = ({
             </h3>
             <p>
               HavenBlocks never forces disruptive interstitial ads. Watching a
-              rewarded ad for extra Undo, Rotate, Revive, or Double Stars is
-              strictly opt-in. On Google Play builds, regional privacy consent is
+              rewarded ad for an Undo refill or 3×3 Revive is strictly opt-in.
+              On Android builds using AdMob, regional privacy consent is
               managed via Google User Messaging Platform (UMP).
             </p>
           </section>
@@ -363,9 +363,7 @@ export const PrivacyTermsModal: React.FC<PrivacyTermsModalProps> = ({
               3. Purchases &amp; Terms of Use
             </h3>
             <p>
-              Optional bundles and Cozy Gem packs are processed through Google
-              Play Billing. Non-consumable entitlements such as the &ldquo;No
-              Ads + Cozy Starter Bundle&rdquo; can be restored from Settings.
+              Real-money purchases are not offered in this release.
               Game progress is provided for personal entertainment with no
               real-money wagering.
             </p>
@@ -378,15 +376,15 @@ export const PrivacyTermsModal: React.FC<PrivacyTermsModalProps> = ({
             <p>
               You can erase all local game data immediately using{' '}
               <strong>Settings &rarr; Delete Local Save Data</strong> or by
-              clearing app storage on Android. View the standalone Play Store
+              clearing app storage on Android. View the standalone
               policy page at{' '}
               <a
-                href="/privacy.html"
+                href={`${import.meta.env.BASE_URL}privacy.html`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="underline font-semibold text-[#1E3A2F] dark:text-amber-300"
               >
-                /privacy.html
+                privacy.html
               </a>
               .
             </p>

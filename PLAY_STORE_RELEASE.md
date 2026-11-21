@@ -1,4 +1,4 @@
-# HavenBlocks: Cozy Room & Garden — Google Play Store Release Guide (2026)
+# HavenBlocks — Google Play Store Release Guide (2026)
 
 This repository is configured as an offline-first PWA + Capacitor Android game ready to package into a signed Android App Bundle (`.aab`) for Google Play.
 

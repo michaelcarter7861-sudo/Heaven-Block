@@ -1,3 +1,4 @@
+import { ENABLE_FULL_META } from '../game/features';
 import React, { useState } from 'react';
 import {
   ArrowRight,
@@ -59,7 +60,7 @@ export const PauseModal: React.FC<PauseModalProps> = ({
         <div className="flex items-center justify-between mb-1">
           <h2 className="font-display text-2xl font-bold">Game Paused</h2>
           <span className="font-mono-num text-xs font-semibold text-[#7A654F] dark:text-amber-300/80">
-            {stats.seedCode}
+            Fair-Play Seed · <code className="select-all">{stats.seedCode}</code>
           </span>
         </div>
         <div className="text-xs text-[#6E5A46] dark:text-[#B4A08A] mb-4">
@@ -386,6 +387,9 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
 
 interface GameOverModalProps {
   stats: RunStats;
+  canRevive: boolean;
+  reviveStatus: string | null;
+  onViewBoard: () => void;
   canUndoRescue: boolean;
   noAdsOwned: boolean;
   isNewBest: boolean;
@@ -398,6 +402,9 @@ interface GameOverModalProps {
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({
   stats,
+  canRevive,
+  reviveStatus,
+  onViewBoard,
   canUndoRescue,
   noAdsOwned,
   isNewBest,
@@ -469,7 +476,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
       aria-label="Out of Moves"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
     >
-      <div className="w-full max-w-sm rounded-2xl p-6 border shadow-2xl bg-[#FAF5EC] border-[#D4C0A3] text-[#2A1F15] dark:bg-[#191410] dark:border-[#3D2E22] dark:text-[#F5EDE1]">
+      <div className="w-full max-w-sm max-h-full overflow-y-auto rounded-2xl p-6 border shadow-2xl bg-[#FAF5EC] border-[#D4C0A3] text-[#2A1F15] dark:bg-[#191410] dark:border-[#3D2E22] dark:text-[#F5EDE1]">
         <div className="mb-4">
           <div className="text-xs font-semibold tracking-wide text-amber-700 dark:text-amber-400 mb-1">
             {isDailyPuzzleSeed(stats.seedCode)
@@ -481,7 +488,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                   : 'Board Full'}
           </div>
           <h2 className="font-display text-2xl font-bold">No Valid Moves Left</h2>
-          {(stats.gemsAwarded ?? 0) > 0 && (
+          {ENABLE_FULL_META && (stats.gemsAwarded ?? 0) > 0 && (
             <div
               data-testid="daily-gems-awarded"
               className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border border-sky-400/60 bg-sky-100/90 text-sky-900 dark:bg-sky-500/20 dark:border-sky-400/40 dark:text-sky-200"
@@ -553,7 +560,9 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         )}
 
         <div className="flex flex-col gap-2.5">
-          {(isNative || noAdsOwned) && (
+          <button type="button" onClick={onViewBoard} className="rounded-xl border border-current/30 min-h-[44px] font-semibold">View Board</button>
+          {reviveStatus && <p role="status" className="text-xs">{reviveStatus}</p>}
+          {canRevive && (
             <button
               type="button"
               data-testid="ad-revive-3x3"
@@ -710,8 +719,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ onClose }) => {
                 Rotate (Key: R) &amp; Undo (Key: Z)
               </div>
               <p>
-                Spin the selected piece 90° clockwise, or rewind your last
-                placement. Clear combos fill your Rotate gauge automatically!
+                Earn Rotate charges by clearing lines and chaining combos. Spend a charge to spin a piece 90° clockwise. One Undo charge lets you rewind a placement.
               </p>
             </div>
           </div>

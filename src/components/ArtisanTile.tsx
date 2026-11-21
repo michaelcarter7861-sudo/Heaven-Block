@@ -7,6 +7,7 @@ import type {
 } from '../game/types';
 
 interface ArtisanTileProps {
+  lightweight?: boolean;
   material: MaterialType;
   tileSkin?: TileSkinId;
   className?: string;
@@ -278,6 +279,13 @@ export const FlowerTile: React.FC<{
 
 FlowerTile.displayName = 'FlowerTile';
 
+const COLORBLIND_SYMBOL_MAP: Record<MaterialType, string> = {
+  honey_oak: '▲',
+  glazed_ceramic: '◆',
+  sea_glass: '●',
+  woven_rattan: '■',
+};
+
 export const ArtisanTile: React.FC<ArtisanTileProps> = React.memo(
   ({
     material,
@@ -290,6 +298,7 @@ export const ArtisanTile: React.FC<ArtisanTileProps> = React.memo(
     special,
     hasAcornGem = false,
     compact = false,
+    lightweight = false,
   }) => {
     const animClass = clearing
       ? 'animate-line-clear'
@@ -301,6 +310,19 @@ export const ArtisanTile: React.FC<ArtisanTileProps> = React.memo(
     const clearRing = highlightClear
       ? 'ring-2 ring-amber-300 dark:ring-amber-300 brightness-110'
       : '';
+
+    if (lightweight) {
+      const color = { honey_oak: '#BD803A', glazed_ceramic: '#98BDAA', sea_glass: '#63AAA5', woven_rattan: '#C3A375' };
+      const fill = color[material];
+      return (
+        <div aria-hidden="true" style={{ backgroundColor: fill }}
+          className={`absolute inset-0 rounded-[5px] border border-black/15 ${opacityClass} ${animClass} ${className}`}>
+          {special && <SpecialOverlay special={special} compact />}
+          <span className="colorblind-material-symbol absolute inset-0 items-center justify-center text-xs font-bold text-black">{COLORBLIND_SYMBOL_MAP[material]}</span>
+          {hasAcornGem && <span className="absolute inset-0 grid place-items-center text-xs">◆</span>}
+        </div>
+      );
+    }
 
     let innerContent: React.ReactNode = null;
     let baseStyle: React.CSSProperties = {};
@@ -416,12 +438,7 @@ export const ArtisanTile: React.FC<ArtisanTileProps> = React.memo(
       );
     }
 
-const COLORBLIND_SYMBOL_MAP: Record<MaterialType, string> = {
-  honey_oak: '▲',
-  glazed_ceramic: '◆',
-  sea_glass: '●',
-  woven_rattan: '■',
-};
+
 
     return (
       <div

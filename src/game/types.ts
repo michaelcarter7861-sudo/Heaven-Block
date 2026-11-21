@@ -122,6 +122,8 @@ export interface PlacementOutcome {
 }
 
 export interface UndoSnapshot {
+  rngState?: number;
+  bestCombo?: number;
   grid: Grid8x8;
   tray: (PieceInstance | null)[];
   pocket: PieceInstance | null;

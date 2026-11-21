@@ -1,3 +1,6 @@
+import { PWAInstallButton } from './components/PWAInstallButton';
+import { ENABLE_FULL_META } from './game/features';
+import { requestPuzzleReward, canRequestPuzzleReward } from './game/puzzleRewards';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Film,
@@ -191,6 +194,12 @@ const MAX_UNDO_HISTORY = 15;
 const TOUCH_THUMB_Y_OFFSET = -76;
 const MOUSE_LIFT_Y_OFFSET = -8;
 
+function updateDragGhost(node: HTMLDivElement | null, session: DragSession | null) {
+  if (!node || !session) return;
+  const lift = session.pointerType === 'touch' ? TOUCH_THUMB_Y_OFFSET : MOUSE_LIFT_Y_OFFSET;
+  node.style.transform = `translate3d(${session.clientX}px, ${session.clientY + lift}px, 0) translate(-50%, -50%) scale(1.04)`;
+}
+
 const MATERIAL_PARTICLE_COLORS: Record<
   MaterialType,
   { colorHex: string; accentHex: string }
@@ -250,9 +259,11 @@ export default function App() {
 
   const autostart = urlParams.get('autostart') === '1';
   const dailyShortcut = urlParams.get('daily') === '1';
-  const havenShortcut = urlParams.get('haven') === '1';
-  const duelParam =
-    urlParams.get('duel') || (dailyShortcut ? getDailyPuzzleSeed() : null);
+  const havenShortcut = ENABLE_FULL_META && urlParams.get('haven') === '1';
+  const requestedSeed = urlParams.get('duel');
+  const duelParam = requestedSeed && (ENABLE_FULL_META || isDailyPuzzleSeed(requestedSeed))
+    ? requestedSeed
+    : dailyShortcut ? getDailyPuzzleSeed() : null;
 
   const [nightCandleMode, setNightCandleMode] = useState<boolean>(
     initialSaved.nightCandleMode
@@ -341,6 +352,7 @@ export default function App() {
     useState<FurnitureStyleId | null>(null);
   const [showDailyStreakModal, setShowDailyStreakModal] = useState<boolean>(
     () =>
+      ENABLE_FULL_META &&
       !autostart &&
       !duelParam &&
       !havenShortcut &&
@@ -352,7 +364,7 @@ export default function App() {
 
   // Selected mode & level on Title Screen / Active Run
   const [mode, setMode] = useState<GameMode>(() =>
-    duelParam ? 'duel' : initialSaved.activeRun?.mode ?? 'story'
+    duelParam ? 'duel' : initialSaved.activeRun?.mode ?? (ENABLE_FULL_META ? 'story' : 'zen')
   );
   const [levelNumber, setLevelNumber] = useState<number>(
     () => initialSaved.activeRun?.levelNumber ?? initialSaved.currentLevel
@@ -363,7 +375,7 @@ export default function App() {
   });
 
   const [phase, setPhase] = useState<GamePhase>(() =>
-    autostart || dailyShortcut || havenShortcut ? 'playing' : 'title'
+    ((autostart && (ENABLE_FULL_META || mode === 'zen' || (mode === 'duel' && isDailyPuzzleSeed(seedCode)))) || dailyShortcut || Boolean(!ENABLE_FULL_META && duelParam) || havenShortcut) ? 'playing' : 'title'
   );
 
   // Derive current LevelDefinition deterministically for mode/level/seed
@@ -418,7 +430,7 @@ export default function App() {
       generateSolvableTray(
         grid,
         null,
-        1,
+        ENABLE_FULL_META ? 1 : 0,
         rngRef.current,
         getTrayOptionsForLevel(activeLevelDef, initDda)
       )
@@ -453,7 +465,7 @@ export default function App() {
     () => (duelParam ? 0 : initialSaved.activeRun?.bonusStarsEarned ?? 0)
   );
   const [rotateCharges, setRotateCharges] = useState<number>(
-    () => (duelParam ? 1 : initialSaved.activeRun?.rotateCharges ?? 1)
+    () => ((duelParam ? undefined : initialSaved.activeRun?.rotateCharges) ?? (ENABLE_FULL_META ? 1 : 0))
   );
   const [rotateGaugePct, setRotateGaugePct] = useState<number>(
     () => (duelParam ? 0 : initialSaved.activeRun?.rotateGaugePct ?? 0)
@@ -467,6 +479,7 @@ export default function App() {
   const [starsAwardedThisRun, setStarsAwardedThisRun] = useState<number>(0);
   const [gemsAwardedThisRun, setGemsAwardedThisRun] = useState<number>(0);
   const [starsDoubledThisRun, setStarsDoubledThisRun] = useState<boolean>(false);
+  const canResumeRun = ENABLE_FULL_META || mode === 'zen' || (mode === 'duel' && isDailyPuzzleSeed(seedCode));
   const [seedPackAwardedThisRun, setSeedPackAwardedThisRun] = useState<boolean>(false);
 
   const [selectedSource, setSelectedSource] = useState<PieceSource | null>(() =>
@@ -475,7 +488,10 @@ export default function App() {
   const [hoverCell, setHoverCell] = useState<{ r: number; c: number } | null>(
     null
   );
-  const [dragSession, setDragSession] = useState<DragSession | null>(null);
+  const [viewFinalBoard, setViewFinalBoard] = useState(false);
+  const [reviveStatus, setReviveStatus] = useState<string | null>(null);
+  const dragHoverRef = useRef<{ row?: number; col?: number; overPocket: boolean }>({ overPocket: false });
+  const [dragSession, setDragSession] = useState<Pick<DragSession, 'source' | 'piece' | 'hasMoved'> | null>(null);
   const [dragPreviewAnchor, setDragPreviewAnchor] = useState<{ r: number; c: number } | null>(null);
   const [isOverPocket, setIsOverPocket] = useState<boolean>(false);
   const [clearingKeys, setClearingKeys] = useState<Set<string>>(new Set());
@@ -484,7 +500,7 @@ export default function App() {
   const [trayWaveId, setTrayWaveId] = useState<number>(1);
   const [banner, setBanner] = useState<FloatingBanner | null>(null);
   const [hasSavedRunFlag, setHasSavedRunFlag] = useState<boolean>(
-    () => Boolean(initialSaved.activeRun && !duelParam)
+    () => Boolean(initialSaved.activeRun?.movesPlaced && !duelParam)
   );
 
   const dragSessionRef = useRef<DragSession | null>(null);
@@ -497,6 +513,10 @@ export default function App() {
   const boardRef = useRef<HTMLDivElement | null>(null);
   const pocketRef = useRef<HTMLButtonElement | null>(null);
   const dragGhostRef = useRef<HTMLDivElement | null>(null);
+  const mountDragGhost = useCallback((node: HTMLDivElement | null) => {
+    dragGhostRef.current = node;
+    updateDragGhost(node, dragSessionRef.current);
+  }, []);
   const dragBoardRectRef = useRef<DOMRect | null>(null);
   const dragPocketRectRef = useRef<DOMRect | null>(null);
   const clearTimerRef = useRef<number | null>(null);
@@ -575,7 +595,7 @@ export default function App() {
 
   // Persist to localStorage
   useEffect(() => {
-    const isFinished = phase === 'gameover' || phase === 'victory';
+    const isFinished = phase === 'gameover' || phase === 'victory' || (phase === 'title' && !hasSavedRunFlag);
     const payload: PersistedState = {
       version: 2,
       bestScore,
@@ -631,7 +651,7 @@ export default function App() {
     latestPayloadRef.current = payload;
     lastSavedJsonRef.current = JSON.stringify(payload);
     savePersistedState(payload);
-    setHasSavedRunFlag(payload.activeRun !== null && movesPlaced > 0);
+    if (phase !== 'title') setHasSavedRunFlag(payload.activeRun !== null && movesPlaced > 0);
   }, [
     bestScore,
     duelBestScore,
@@ -827,6 +847,8 @@ export default function App() {
 
   const triggerGameOverState = useCallback(
     (finalScoreOverride?: number) => {
+      setViewFinalBoard(false);
+      setReviveStatus(null);
       triggerHaptic('warning');
       cozyAudio.playUiTick('gameover');
       const resolvedScore = finalScoreOverride ?? score;
@@ -880,6 +902,7 @@ export default function App() {
         clearTimerRef.current = null;
       }
 
+      setViewFinalBoard(false);
       const nextSeed =
         targetMode === 'duel'
           ? normalizeSeedCode(customSeed ?? seedCode)
@@ -913,7 +936,7 @@ export default function App() {
                 generateSolvableTray(
                   freshGrid,
                   null,
-                  1,
+                  ENABLE_FULL_META ? 1 : 0,
                   rng,
                   getTrayOptionsForLevel(def, ddaBoost)
                 )
@@ -939,7 +962,7 @@ export default function App() {
       setSeedPackAwardedThisRun(false);
       setPreLossStreak(0);
       lossRecordedRef.current = false;
-      setRotateCharges(1);
+      setRotateCharges(ENABLE_FULL_META ? 1 : 0);
       setRotateGaugePct(0);
       setUndoCharges(1);
       setUndoStack([]);
@@ -1035,7 +1058,10 @@ export default function App() {
   const commitPlacement = useCallback(
     (source: PieceSource, piece: PieceInstance, anchorRow: number, anchorCol: number) => {
       const check = previewPlacement(grid, piece.cells, anchorRow, anchorCol);
-      if (!check.valid) return false;
+      if (!check.valid) {
+        cozyAudio.playError();
+        return false;
+      }
 
       const snapshot: UndoSnapshot = {
         grid: cloneGrid(grid),
@@ -1069,6 +1095,8 @@ export default function App() {
         rotateCharges,
         rotateGaugePct,
         selectedSource,
+        rngState: rngRef.current.getState(),
+        bestCombo,
       };
 
       const outcome = applyPlacement(
@@ -1439,7 +1467,7 @@ export default function App() {
   );
 
   const handleRotateSelected = useCallback(() => {
-    if (phase !== 'playing') return;
+    if (phase !== 'playing' || dragSessionRef.current) return;
     if (rotateCharges <= 0) {
       showBanner('Need Rotate Charge', 'Clear 2+ lines or build a 2× combo');
       return;
@@ -1471,7 +1499,7 @@ export default function App() {
   }, [phase, rotateCharges, selectedSource, tray, pocket, dismissTip, showBanner]);
 
   const handleUndo = useCallback(() => {
-    if (undoStack.length === 0) return;
+    if ((phase !== 'playing' && phase !== 'gameover') || dragSessionRef.current || undoStack.length === 0) return;
     if (undoCharges <= 0) {
       showBanner('No Undo Left', 'Tap Refill +1 to recharge');
       return;
@@ -1482,6 +1510,8 @@ export default function App() {
     setUndoStack((prev) => prev.slice(0, -1));
     setUndoCharges((c) => Math.max(0, c - 1));
 
+    if (latest.rngState !== undefined) rngRef.current = mulberry32(latest.rngState);
+    if (latest.bestCombo !== undefined) setBestCombo(latest.bestCombo);
     setGrid(latest.grid);
     setTray(latest.tray);
     setPocket(latest.pocket);
@@ -1514,18 +1544,26 @@ export default function App() {
     showBanner('Move Reverted', 'Tactical Undo used');
   }, [undoStack, undoCharges, phase, showBanner]);
 
+  const rewardContextRef = useRef({ phase, grid, tray, pocket });
+  if (rewardContextRef.current.phase !== phase || rewardContextRef.current.grid !== grid || rewardContextRef.current.tray !== tray || rewardContextRef.current.pocket !== pocket) {
+    rewardContextRef.current = { phase, grid, tray, pocket };
+  }
+
   const handleRechargeUndo = useCallback(async () => {
     if (!monetization.noAdsBundlePurchased) {
-      showBanner('Preparing rewarded ad…', 'Connecting to Google AdMob');
+      showBanner('Preparing rewarded ad…', 'Optional Undo refill');
     }
-    const res = await showRewardedAd('UNDO', {
+    if (dragSessionRef.current) return;
+    const context = rewardContextRef.current;
+    const res = await requestPuzzleReward('UNDO', {
       noAdsOwned: monetization.noAdsBundlePurchased,
     });
+    if (context !== rewardContextRef.current) return;
     if (!res.rewarded) {
       showBanner('Rewarded ad unavailable', res.message ?? 'Please try again later.');
       return;
     }
-    setUndoCharges((c) => c + 1);
+    setUndoCharges((c) => Math.max(c, 1));
     cozyAudio.playRewardChime();
     showBanner('+1 Undo Rewarded', res.skippedAsVip ? 'VIP Ad-Free' : undefined);
   }, [monetization.noAdsBundlePurchased, showBanner]);
@@ -1547,14 +1585,14 @@ export default function App() {
   }, [monetization.noAdsBundlePurchased, showBanner]);
 
   const handleReviveClear3x3 = useCallback(async () => {
-    if (!monetization.noAdsBundlePurchased) {
-      showBanner('Preparing rewarded ad…', 'Loading the Garden Rescue reward');
-    }
-    const res = await showRewardedAd('REVIVE_CLEAR_3X3', {
+    setReviveStatus('Preparing optional reward…');
+    const context = rewardContextRef.current;
+    const res = await requestPuzzleReward('REVIVE_CLEAR_3X3', {
       noAdsOwned: monetization.noAdsBundlePurchased,
     });
+    if (context !== rewardContextRef.current) return;
     if (!res.rewarded) {
-      showBanner('Rewarded ad unavailable', res.message ?? 'Please try again later.');
+      setReviveStatus(res.message ?? 'Rewarded ad unavailable. Please try again later.');
       return;
     }
 
@@ -1911,6 +1949,11 @@ export default function App() {
     setClaimedMilestones(next.claimedMilestones ?? []);
     setRewardedCompletedChapters(next.rewardedCompletedChapters ?? []);
 
+    if (!ENABLE_FULL_META) {
+      // A backup can contain a legacy Story or Duel run; preserve it without entering it.
+      setAppView('puzzle');
+      setPhase('title');
+    }
     if (next.activeRun) {
       setMode(next.activeRun.mode);
       setSeedCode(next.activeRun.seedCode);
@@ -1938,7 +1981,9 @@ export default function App() {
     cozyAudio.playRewardChime();
     return {
       ok: true,
-      message: `Progress restored! (${next.cozyStars} Cozy Stars · Level ${next.unlockedLevel})`,
+      message: ENABLE_FULL_META
+        ? `Progress restored! (${next.cozyStars} Cozy Stars · Level ${next.unlockedLevel})`
+        : 'Progress and settings restored.',
     };
   }, []);
 
@@ -2011,7 +2056,7 @@ export default function App() {
     setMossCleared(0);
     setAcornGemsCollected(0);
     setBonusStarsEarned(0);
-    setRotateCharges(1);
+    setRotateCharges(ENABLE_FULL_META ? 1 : 0);
     setRotateGaugePct(0);
     setUndoCharges(1);
     setUndoStack([]);
@@ -2052,17 +2097,18 @@ export default function App() {
     computeBoardAnchor,
     commitPlacement,
     moveTrayPieceToPocket,
+    phase,
   });
   dragActionsRef.current = {
     checkIsOverPocket,
     computeBoardAnchor,
     commitPlacement,
     moveTrayPieceToPocket,
+    phase,
   };
 
   // Global Pointer listeners are registered once. Pointermove events are
-  // coalesced to one state update per animation frame, avoiding listener churn
-  // and repeated React renders on high-rate touchscreens.
+  // coalesced to one DOM transform per frame; React only handles cell changes.
   useEffect(() => {
     const clearPendingDragFrame = () => {
       if (dragFrameRef.current !== null) {
@@ -2074,7 +2120,7 @@ export default function App() {
 
     const handlePointerMove = (e: PointerEvent) => {
       const active = dragSessionRef.current;
-      if (!active || e.pointerId !== active.pointerId) return;
+      if (!active || e.pointerId !== active.pointerId || dragActionsRef.current.phase !== 'playing') return;
 
       pendingDragPointerRef.current = {
         pointerId: e.pointerId,
@@ -2087,7 +2133,7 @@ export default function App() {
         dragFrameRef.current = null;
         const point = pendingDragPointerRef.current;
         const current = dragSessionRef.current;
-        if (!point || !current || point.pointerId !== current.pointerId) return;
+        if (!point || !current || point.pointerId !== current.pointerId || dragActionsRef.current.phase !== 'playing') return;
 
         const moved =
           current.hasMoved ||
@@ -2095,46 +2141,31 @@ export default function App() {
             point.clientX - current.startX,
             point.clientY - current.startY
           ) > 6;
-        // Ignore touch jitter until a drag is real, then skip sub-2px updates.
+        // Ignore touch jitter only until the drag threshold is crossed.
         if (!moved) return;
-        const deltaX = point.clientX - current.clientX;
-        const deltaY = point.clientY - current.clientY;
-        if (current.hasMoved && deltaX * deltaX + deltaY * deltaY < 16) return;
 
-        const next: DragSession = {
-          ...current,
-          clientX: point.clientX,
-          clientY: point.clientY,
-          hasMoved: true,
-        };
-        dragSessionRef.current = next;
-
-        // Mount the drag ghost once; update its compositor transform directly.
-        // Avoid re-rendering the full game tree for every touch pointer frame.
-        if (!current.hasMoved) setDragSession(next);
+        const firstFrame = !current.hasMoved;
+        current.clientX = point.clientX;
+        current.clientY = point.clientY;
+        current.hasMoved = true;
+        if (firstFrame) setDragSession({ source: current.source, piece: current.piece, hasMoved: true });
 
         const actions = dragActionsRef.current;
         const overPocket =
           current.source.kind === 'tray' &&
           actions.checkIsOverPocket(point.clientX, point.clientY, current.pointerType);
-        setIsOverPocket((previous) =>
-          previous === overPocket ? previous : overPocket
-        );
 
         const anchor = overPocket
           ? null
           : actions.computeBoardAnchor(current.piece, point.clientX, point.clientY, current.pointerType);
-        setDragPreviewAnchor((previous) => {
-          if (previous?.r === anchor?.anchorRow && previous?.c === anchor?.anchorCol) return previous;
-          return anchor ? { r: anchor.anchorRow, c: anchor.anchorCol } : null;
-        });
-
-        const ghost = dragGhostRef.current;
-        if (ghost) {
-          const yOffset = current.pointerType === 'touch' ? TOUCH_THUMB_Y_OFFSET : MOUSE_LIFT_Y_OFFSET;
-          ghost.style.transform =
-            'translate3d(' + point.clientX + 'px, ' + (point.clientY + yOffset) + 'px, 0) translate(-50%, -50%) scale(1.04)';
+        const previous = dragHoverRef.current;
+        if (previous.overPocket !== overPocket) setIsOverPocket(overPocket);
+        if (previous.row !== anchor?.anchorRow || previous.col !== anchor?.anchorCol) {
+          setDragPreviewAnchor(anchor ? { r: anchor.anchorRow, c: anchor.anchorCol } : null);
         }
+        dragHoverRef.current = { row: anchor?.anchorRow, col: anchor?.anchorCol, overPocket };
+
+        updateDragGhost(dragGhostRef.current, current);
       });
     };
 
@@ -2147,6 +2178,10 @@ export default function App() {
         current.hasMoved ||
         Math.hypot(e.clientX - current.startX, e.clientY - current.startY) > 6;
 
+      if (dragActionsRef.current.phase !== 'playing') {
+        handleWindowBlur();
+        return;
+      }
       if (!moved) {
         setSelectedSource(current.source);
       } else {
@@ -2193,16 +2228,24 @@ export default function App() {
       setIsOverPocket(false);
     };
 
+    const handlePointerCancel = (e: PointerEvent) => {
+      if (e.pointerId === dragSessionRef.current?.pointerId) handleWindowBlur();
+    };
+
     window.addEventListener('pointermove', handlePointerMove, { passive: true });
     window.addEventListener('pointerup', handlePointerEnd);
-    window.addEventListener('pointercancel', handlePointerEnd);
+    window.addEventListener('pointercancel', handlePointerCancel);
+    window.addEventListener('lostpointercapture', handlePointerCancel);
+    window.addEventListener('resize', handleWindowBlur);
     window.addEventListener('blur', handleWindowBlur);
 
     return () => {
       clearPendingDragFrame();
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerEnd);
-      window.removeEventListener('pointercancel', handlePointerEnd);
+      window.removeEventListener('pointercancel', handlePointerCancel);
+      window.removeEventListener('lostpointercapture', handlePointerCancel);
+      window.removeEventListener('resize', handleWindowBlur);
       window.removeEventListener('blur', handleWindowBlur);
     };
   }, []);
@@ -2218,6 +2261,10 @@ export default function App() {
       }
 
       if (e.key === 'Escape') {
+        if (phase === 'gameover' && viewFinalBoard) {
+          setViewFinalBoard(false);
+          return;
+        }
         if (showHelpModal) {
           e.preventDefault();
           setShowHelpModal(false);
@@ -2268,6 +2315,7 @@ export default function App() {
       }
 
       if (phase === 'title') {
+        if (!ENABLE_FULL_META) return; // Let focused launch buttons handle Enter/Space.
         if (
           (e.key === 'Enter' || e.key === ' ') &&
           !showBundleModal &&
@@ -2288,6 +2336,7 @@ export default function App() {
       if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
         if (phase === 'playing') {
           e.preventDefault();
+          if (dragSessionRef.current) return;
           document.body.dataset.state = 'paused';
           setPhase('paused');
         } else if (phase === 'paused') {
@@ -2303,7 +2352,7 @@ export default function App() {
         return;
       }
 
-      if (phase !== 'playing' || appView !== 'puzzle') return;
+      if (phase !== 'playing' || appView !== 'puzzle' || dragSessionRef.current) return;
 
       if (e.key === 'r' || e.key === 'R') {
         e.preventDefault();
@@ -2327,6 +2376,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [
     phase,
+    viewFinalBoard,
     appView,
     showBundleModal,
     showShopModal,
@@ -2353,8 +2403,9 @@ export default function App() {
   ]);
 
   const activePreview: PlacementPreview | null = useMemo(() => {
-    if (dragSession && dragSession.hasMoved && !isOverPocket) {
-      if (!dragPreviewAnchor) return null;
+    if (phase !== 'playing') return null;
+    if (dragSession?.hasMoved) {
+      if (isOverPocket || !dragPreviewAnchor) return null;
       return previewPlacement(grid, dragSession.piece.cells, dragPreviewAnchor.r, dragPreviewAnchor.c);
     }
 
@@ -2366,6 +2417,7 @@ export default function App() {
 
     return null;
   }, [
+    phase,
     dragSession,
     dragPreviewAnchor,
     isOverPocket,
@@ -2383,7 +2435,7 @@ export default function App() {
 
   const handleBoardPointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      if (dragSession || e.pointerType === 'touch' || !selectedSource) return;
+      if (phase !== 'playing' || dragSessionRef.current || e.pointerType === 'touch' || !selectedSource) return;
       const boardEl = boardRef.current;
       if (!boardEl) return;
       const rect = boardEl.getBoundingClientRect();
@@ -2395,12 +2447,12 @@ export default function App() {
         );
       }
     },
-    [dragSession, selectedSource]
+    [phase, selectedSource]
   );
 
   const handleCellClick = useCallback(
     (row: number, col: number) => {
-      if (phase !== 'playing' || !selectedSource) return;
+      if (phase !== 'playing' || dragSessionRef.current || !selectedSource) return;
       const piece = getPieceAtSource(selectedSource, tray, pocket);
       if (!piece) return;
       commitPlacement(selectedSource, piece, row, col);
@@ -2419,8 +2471,10 @@ export default function App() {
 
   const startPieceDrag = useCallback(
     (e: React.PointerEvent, source: PieceSource, piece: PieceInstance) => {
-      if (phase !== 'playing') return;
+      if (phase !== 'playing' || dragSessionRef.current || e.button !== 0) return;
       e.preventDefault();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      dragHoverRef.current = { overPocket: false };
       triggerHaptic('light');
       cozyAudio.playPickup(piece.material);
       const nextDragSession: DragSession = {
@@ -2440,7 +2494,8 @@ export default function App() {
       pendingDragPointerRef.current = null;
       setDragPreviewAnchor(null);
       setIsOverPocket(false);
-      setDragSession(nextDragSession);
+      setHoverCell(null);
+      setDragSession({ source, piece, hasMoved: false });
     },
     [phase]
   );
@@ -2457,7 +2512,27 @@ export default function App() {
 
     return (
       <>
-        <TitleScreen
+        {!ENABLE_FULL_META ? (
+          <main className="min-h-dvh flex items-center justify-center p-5 bg-[#F6EFE4] text-[#1E3A2F] dark:bg-[#191410] dark:text-amber-100">
+            <section className="w-full max-w-md space-y-4 rounded-3xl border border-current/20 p-7">
+              <h1 className="font-display text-4xl font-bold">HavenBlocks</h1>
+              <p>An honest 8×8 block puzzle. Zero forced ads. Ads never interrupt a move.</p>
+              <p className="text-sm">Place blocks, clear lines, and beat your best score: <strong>{bestScore.toLocaleString()}</strong>.</p>
+              <p className="text-xs">Fair-Play Seed · Daily <code className="select-all">{getDailyPuzzleSeed()}</code></p>
+              <button className="w-full rounded-xl bg-[#1E3A2F] py-3 font-bold text-white dark:bg-amber-200 dark:text-[#191410]" onClick={handleStartDailyPuzzle}>Daily Honest Seed</button>
+              <button className="w-full rounded-xl border border-current/30 py-3 font-bold" onClick={() => startRun('zen', levelNumber)}>Endless Zen</button>
+              {hasSavedRunFlag && canResumeRun && (
+                <button className="w-full rounded-xl border border-current/30 py-3" onClick={resumeSavedRun}>Resume · {savedLabel}</button>
+              )}
+              <div className="flex flex-wrap gap-4 text-sm underline">
+                <button onClick={() => setNightCandleMode((v) => !v)}>{nightCandleMode ? 'Daylight' : 'Night Candle'}</button>
+                <button onClick={() => setShowSettingsModal(true)}>Settings</button>
+                <button onClick={() => setShowPrivacyModal(true)}>Privacy</button>
+                <PWAInstallButton />
+              </div>
+            </section>
+          </main>
+        ) : <TitleScreen
           selectedMode={mode}
           selectedLevel={levelNumber}
           unlockedLevel={unlockedLevel}
@@ -2497,8 +2572,8 @@ export default function App() {
           onOpenBundle={() => setShowBundleModal(true)}
           onOpenSettings={() => setShowSettingsModal(true)}
           onOpenPrivacyTerms={() => setShowPrivacyModal(true)}
-        />
-        {showJournalModal && (
+        />}
+        {ENABLE_FULL_META && showJournalModal && (
           <JournalModal
             initialTab={journalInitialTab}
             context={milestoneContext}
@@ -2512,21 +2587,21 @@ export default function App() {
             onClose={() => setShowJournalModal(false)}
           />
         )}
-        {showDailyStreakModal && (
+        {ENABLE_FULL_META && showDailyStreakModal && (
           <DailyStreakModal
             monetization={monetization}
             onClaim={handleClaimDailyStreak}
             onClose={() => setShowDailyStreakModal(false)}
           />
         )}
-        {showBundleModal && (
+        {ENABLE_FULL_META && showBundleModal && (
           <StarterBundleModal
             purchased={monetization.noAdsBundlePurchased}
             onPurchase={handlePurchaseBundle}
             onClose={() => setShowBundleModal(false)}
           />
         )}
-        {showShopModal && (
+        {ENABLE_FULL_META && showShopModal && (
           <ShopModal
             initialTab={shopInitialTab}
             cozyGems={cozyGems}
@@ -2674,11 +2749,12 @@ export default function App() {
       className={`safe-area-shell min-h-dvh w-full overflow-x-hidden flex flex-col justify-between select-none text-[#2A1F15] dark:text-[#F5EDE1] transition-colors duration-300 ${ambienceBgClass}`}
     >
       {/* Compact Top HUD */}
-      <header className="w-full max-w-5xl mx-auto px-2.5 sm:px-6 pt-2 sm:pt-3.5 pb-1 flex flex-wrap items-center justify-between gap-1.5 sm:gap-2">
+      <header inert={phase === 'gameover'} className="w-full max-w-5xl mx-auto px-2.5 sm:px-6 pt-2 sm:pt-3.5 pb-1 flex flex-wrap items-center justify-between gap-1.5 sm:gap-2">
         <div className="order-1 flex items-center gap-2 min-w-0 flex-1 sm:flex-initial">
           <button
             type="button"
             onClick={() => {
+              if (phase !== 'playing' || dragSessionRef.current) return;
               document.body.dataset.state = 'paused';
               setPhase('paused');
             }}
@@ -2734,18 +2810,18 @@ export default function App() {
 
           <div className="text-center">
             <div className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider text-[#7A654F] dark:text-[#A4907B]">
-              Stars
+              {ENABLE_FULL_META ? 'Stars' : 'Best'}
             </div>
             <div
               data-testid="best-score-value"
               className="font-mono-num text-xs sm:text-base font-semibold leading-tight text-[#4D3B2A] dark:text-[#E2D3C0] inline-flex items-center gap-0.5 sm:gap-1"
             >
-              <Star className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-500 fill-amber-400" />
-              <span>{cozyStars}</span>
+              {ENABLE_FULL_META && <Star className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-500 fill-amber-400" />}
+              <span>{(ENABLE_FULL_META ? cozyStars : bestScore).toLocaleString()}</span>
             </div>
           </div>
 
-          <button
+          {ENABLE_FULL_META && (<button
             type="button"
             data-testid="hud-gem-badge"
             onClick={() => openShop('bundles')}
@@ -2757,13 +2833,13 @@ export default function App() {
             <Gem className="w-3.5 h-3.5 text-sky-600 dark:text-sky-300" />
             <span className="font-mono-num">{cozyGems.toLocaleString()}</span>
             <Plus className="w-3 h-3 text-sky-700 dark:text-sky-300" />
-          </button>
+          </button>)}
         </div>
 
         {/* Seamless Puzzle / My Haven Tab Switch + Lantern Streak + Utility Toggles */}
         <div className="order-3 sm:order-2 w-full sm:w-auto flex items-center justify-between sm:justify-center gap-1 sm:gap-2">
           <div className="flex items-center gap-1 sm:gap-1.5 min-w-0">
-            <div
+            {ENABLE_FULL_META && (<div
               role="tablist"
               aria-label="Workspace view"
               className="inline-flex gap-0.5 sm:gap-1 p-0.5 sm:p-1 rounded-xl border bg-[#E7D8C0] border-[#D4C0A3] dark:bg-[#15100C] dark:border-[#33251B] shrink-0"
@@ -2798,9 +2874,9 @@ export default function App() {
                 <Home className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
                 <span>Haven</span>
               </button>
-            </div>
+            </div>)}
 
-            {appView === 'puzzle' && (
+            {ENABLE_FULL_META && appView === 'puzzle' && (
               <div
                 data-testid="firefly-streak-tracker"
                 aria-label={`Firefly Lantern Win-Streak ${fireflyStreak} of 5`}
@@ -2839,7 +2915,7 @@ export default function App() {
           </div>
 
           <div className="flex sm:hidden items-center gap-1 shrink-0">
-            {unlockedLevel >= 2 && nativeRuntime && (
+            {ENABLE_FULL_META && unlockedLevel >= 2 && nativeRuntime && (
               <button
                 type="button"
                 data-testid="hud-bundle-button-mobile"
@@ -2852,7 +2928,7 @@ export default function App() {
                 <ShieldCheck className="w-3.5 h-3.5" />
               </button>
             )}
-            <button
+            {ENABLE_FULL_META && (<button
               type="button"
               data-testid="hud-journal-btn-mobile"
               onClick={() => openJournal('calendar')}
@@ -2868,7 +2944,7 @@ export default function App() {
                   className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500"
                 />
               )}
-            </button>
+            </button>)}
             <button
               type="button"
               data-testid="hud-help-btn-mobile"
@@ -2927,7 +3003,7 @@ export default function App() {
 
         {/* Desktop Utility Buttons */}
         <div className="hidden sm:flex order-4 items-center gap-1.5 shrink-0">
-          {unlockedLevel >= 2 && nativeRuntime && (
+          {ENABLE_FULL_META && unlockedLevel >= 2 && nativeRuntime && (
             <button
               type="button"
               data-testid="hud-bundle-button"
@@ -2940,7 +3016,7 @@ export default function App() {
               <ShieldCheck className="w-4 h-4" />
             </button>
           )}
-          <button
+          {ENABLE_FULL_META && (<button
             type="button"
             data-testid="hud-journal-btn"
             onClick={() => openJournal('calendar')}
@@ -2956,7 +3032,7 @@ export default function App() {
                 className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500"
               />
             )}
-          </button>
+          </button>)}
           <button
             type="button"
             data-testid="hud-help-btn"
@@ -3019,7 +3095,7 @@ export default function App() {
       {/* Main Play or Haven Workspace */}
       {appView === 'haven' ? (
         <main className="flex-1 w-full flex flex-col justify-center pb-3">
-          {showFirstSofaPrompt && (
+          {ENABLE_FULL_META && showFirstSofaPrompt && (
             <div className="w-full max-w-5xl mx-auto px-3 sm:px-6 mb-2">
               <div
                 data-testid="haven-first-sofa-banner"
@@ -3191,7 +3267,7 @@ export default function App() {
             particleBursts={particleBursts}
             shakeKey={boardShakeKey}
             tileSkin={activeTileSkin}
-            canTapToPlace={Boolean(selectedPiece)}
+            canTapToPlace={phase === 'playing' && Boolean(selectedPiece)}
             firstMoveHookActive={
               mode === 'story' && levelNumber === 1 && movesPlaced === 0
             }
@@ -3199,11 +3275,11 @@ export default function App() {
           />
 
           {/* Floating Score / Special FX Banner */}
-          {banner && (
+          {phase === 'playing' && banner && (
             <div
               key={banner.id}
               data-testid="floating-banner"
-              className="pointer-events-none absolute top-11 left-1/2 -translate-x-1/2 z-20 px-3.5 py-1.5 rounded-xl text-center shadow-xl border backdrop-blur-sm animate-float-score
+              className="pointer-events-none absolute top-11 left-1/2 -translate-x-1/2 z-20 px-3.5 py-1.5 rounded-xl text-center shadow-xl border animate-float-score
                 bg-[#1E3A2F]/95 border-emerald-900/40 text-[#FDF8F2] dark:bg-amber-500/95 dark:border-amber-200/40 dark:text-[#120D08]"
             >
               <div className="text-xs font-bold whitespace-nowrap">{banner.text}</div>
@@ -3218,11 +3294,12 @@ export default function App() {
 
         {/* Tactical Dock (Guided First Sofa / JIT Tip / Pocket, Rotate, Undo, 3-Piece Tray) */}
         <section
+          inert={phase === 'gameover'}
           aria-label="Tactical Dock and Piece Tray"
           className="w-full max-w-[430px] lg:max-w-[380px] flex flex-col gap-1.5 sm:gap-2"
         >
           {/* First-Session Payoff: Non-Blocking, Skippable Guided First Sofa Prompt */}
-          {showFirstSofaPrompt && (
+          {ENABLE_FULL_META && showFirstSofaPrompt && (
             <div
               data-testid="guided-first-sofa-prompt"
               className="p-2.5 rounded-2xl border shadow-sm bg-emerald-50/95 border-emerald-300 text-emerald-950 dark:bg-[#131F1A] dark:border-emerald-500/40 dark:text-emerald-100"
@@ -3407,7 +3484,7 @@ export default function App() {
                     style={{ width: `${Math.min(100, rotateGaugePct)}%` }}
                   />
                 </div>
-                {nativeRuntime || monetization.noAdsBundlePurchased ? (
+                {ENABLE_FULL_META && (nativeRuntime || monetization.noAdsBundlePurchased) ? (
                   <button
                     type="button"
                     data-testid="ad-reward-rotate"
@@ -3454,7 +3531,7 @@ export default function App() {
                 <span>Undo</span>
               </button>
 
-              {nativeRuntime || monetization.noAdsBundlePurchased ? (
+              {canRequestPuzzleReward(monetization.noAdsBundlePurchased) && undoCharges === 0 && undoStack.length > 0 ? (
                 <button
                   type="button"
                   data-testid="recharge-undo-button"
@@ -3482,7 +3559,7 @@ export default function App() {
           {/* 3-Piece Solvable Artisan Tray */}
           <div
             data-testid="piece-tray"
-            className="grid grid-cols-3 gap-1.5 sm:gap-2 p-1.5 sm:p-2.5 rounded-2xl border
+            className="touch-none select-none grid grid-cols-3 gap-1.5 sm:gap-2 p-1.5 sm:p-2.5 rounded-2xl border
               bg-[#E7D8C0] border-[#CDB694] shadow-inner
               dark:bg-[#14100C] dark:border-[#33251B]"
           >
@@ -3577,20 +3654,13 @@ export default function App() {
       )}
 
       {/* Floating Drag Ghost */}
-      {dragSession && dragSession.hasMoved && (
+      {phase === 'playing' && dragSession?.hasMoved && (
         <div
-          ref={dragGhostRef}
+          ref={mountDragGhost}
+          aria-hidden="true"
+          data-testid="drag-ghost"
           className="fixed left-0 top-0 z-50 pointer-events-none"
-          style={{
-            transform:
-              'translate3d(' + dragSession.clientX + 'px, ' +
-              (dragSession.clientY +
-                (dragSession.pointerType === 'touch'
-                  ? TOUCH_THUMB_Y_OFFSET
-                  : MOUSE_LIFT_Y_OFFSET)) +
-              'px, 0) translate(-50%, -50%) scale(1.04)',
-            willChange: 'transform',
-          }}
+          style={{ willChange: 'transform' }}
         >
           <PiecePreview
             piece={dragSession.piece}
@@ -3659,7 +3729,7 @@ export default function App() {
             matchHistorySentinelRef.current = false;
             document.body.dataset.state = 'title';
             setPhase('title');
-            if (canAutoShowDailyStreakPopup(monetization, unlockedLevel)) {
+            if (ENABLE_FULL_META && canAutoShowDailyStreakPopup(monetization, unlockedLevel)) {
               setShowDailyStreakModal(true);
             }
           }}
@@ -3667,8 +3737,14 @@ export default function App() {
       )}
 
       {/* Game Over Modal */}
-      {phase === 'gameover' && (
+      {phase === 'gameover' && viewFinalBoard && (
+        <button className="fixed bottom-4 right-4 z-50 rounded-xl bg-[#1E3A2F] p-3 text-white" onClick={() => setViewFinalBoard(false)}>Back to results</button>
+      )}
+      {phase === 'gameover' && !viewFinalBoard && (
         <GameOverModal
+          onViewBoard={() => setViewFinalBoard(true)}
+          canRevive={canRequestPuzzleReward(monetization.noAdsBundlePurchased)}
+          reviveStatus={reviveStatus}
           stats={runStats}
           canUndoRescue={undoCharges > 0 && undoStack.length > 0}
           noAdsOwned={monetization.noAdsBundlePurchased}
@@ -3689,7 +3765,7 @@ export default function App() {
       {showHelpModal && <HelpModal onClose={() => setShowHelpModal(false)} />}
 
       {/* Store Bundle Modal */}
-      {showBundleModal && (
+      {ENABLE_FULL_META && showBundleModal && (
         <StarterBundleModal
           purchased={monetization.noAdsBundlePurchased}
           onPurchase={handlePurchaseBundle}
@@ -3698,7 +3774,7 @@ export default function App() {
       )}
 
       {/* 3-Tab Cozy Shop Modal */}
-      {showShopModal && (
+      {ENABLE_FULL_META && showShopModal && (
         <ShopModal
           initialTab={shopInitialTab}
           cozyGems={cozyGems}
@@ -3716,7 +3792,7 @@ export default function App() {
       )}
 
       {/* 3-Tab Cozy Journal Modal */}
-      {showJournalModal && (
+      {ENABLE_FULL_META && showJournalModal && (
         <JournalModal
           initialTab={journalInitialTab}
           context={milestoneContext}
@@ -3732,7 +3808,7 @@ export default function App() {
       )}
 
       {/* Daily Streak Modal */}
-      {showDailyStreakModal && (
+      {ENABLE_FULL_META && showDailyStreakModal && (
         <DailyStreakModal
           monetization={monetization}
           onClaim={handleClaimDailyStreak}
