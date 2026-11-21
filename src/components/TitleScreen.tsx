@@ -308,7 +308,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
             viewBox="0 0 420 132"
             className="w-full h-auto drop-shadow-sm"
             role="img"
-            aria-label="HavenBlocks: Cozy Room & Garden"
+            aria-label="HavenBlocks"
           >
             <defs>
               <linearGradient id="oakCarved" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -673,7 +673,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                 </span>
               </div>
               <p className="text-xs text-[#5C4936] dark:text-[#C4B29D] leading-relaxed">
-                Classic open 8×8 wooden grid with 100% solvable trays, Cozy Pocket reserve, Combo-Earned Rotation, and Tactical Undo.
+                Classic open 8×8 wooden grid with solver-checked trays, Cozy Pocket reserve, Combo-Earned Rotation, and Tactical Undo.
               </p>
             </div>
           )}

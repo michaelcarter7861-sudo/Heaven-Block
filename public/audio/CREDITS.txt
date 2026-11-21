@@ -1,0 +1,20 @@
+HavenBlocks sampled audio
+
+These clips are from The Battle for Wesnoth, revision
+9544ef5d7c6e5cf25cf06e77bba5833ea74bfb42. Original recordings and
+source audio: https://github.com/wesnoth/wesnoth/tree/9544ef5d7c6e5cf25cf06e77bba5833ea74bfb42/data
+HavenBlocks edited the one-shots for duration, gain and fade-out and
+encoded the five clips as mono Ogg Vorbis. These licenses apply to the
+individual sound assets, not to the HavenBlocks application.
+
+wood.ogg — data/core/sounds/club.ogg; Leonardo Magno Sampaio (leorock116)
+combo.ogg — data/core/sounds/magic-holy-1.ogg; Richard Kettering (Jetrel)
+error.ogg — data/core/sounds/wose-hit.ogg; Lari Nieminen (zookeeper)
+rain.ogg — data/internal/Weather/sounds/weather-rain.ogg; inferno8 and dalas
+The four clips above are distributed under GPL version 2 or later (GPL-2.0.txt).
+
+clear.ogg — data/campaigns/The_Deceivers_Gambit/sounds/bell.ogg;
+gregswinford (https://freesound.org/people/gregswinford/sounds/70102/),
+Wesnoth adaptation credited to the campaign sound contributors.
+The edited version is distributed under CC BY-SA 4.0:
+https://creativecommons.org/licenses/by-sa/4.0/

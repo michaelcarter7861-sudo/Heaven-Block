@@ -1,3 +1,4 @@
+import { ENABLE_FULL_META } from '../game/features';
 import React from 'react';
 import { LEVEL1_HOOK_TARGET_CELLS } from '../game/levels';
 import {
@@ -43,7 +44,8 @@ interface MemoizedBoardCellProps {
   c: number;
   boardShape: BoardShapeId;
   cell: BoardCellContent;
-  ghostInfo?: PreviewCellInfo;
+  ghostSpecial?: PreviewCellInfo['special'];
+  ghostHasAcorn?: boolean;
   showValidGhost: boolean;
   showInvalidGhost: boolean;
   isClearingNow: boolean;
@@ -58,7 +60,7 @@ interface MemoizedBoardCellProps {
 // Drag previews move every frame. Memoizing each cell prevents all 64 cells
 // from re-rendering when only the ghost-piece coordinates have changed.
 const MemoizedBoardCell = React.memo<MemoizedBoardCellProps>(({
-  r, c, boardShape, cell, ghostInfo, showValidGhost, showInvalidGhost,
+  r, c, boardShape, cell, ghostSpecial, ghostHasAcorn, showValidGhost, showInvalidGhost,
   isClearingNow, isLineClearHighlight, isHookTarget, canTapToPlace,
   previewMaterial, tileSkin, onCellClick,
 }) => {
@@ -100,16 +102,11 @@ const MemoizedBoardCell = React.memo<MemoizedBoardCellProps>(({
         'relative w-full h-full rounded-[6px] focus-visible:outline-2 focus-visible:outline-amber-500',
         canTapToPlace && !cell ? 'cursor-pointer' : 'cursor-default',
         isLineClearHighlight
-          ? 'bg-amber-200/80 dark:bg-amber-500/25 ring-2 ring-amber-400/90 dark:ring-amber-400/80 animate-clear-preview-shimmer'
+          ? 'bg-amber-200/80 dark:bg-amber-500/25 outline outline-2 outline-amber-400'
           : isHookTarget
             ? 'bg-amber-100/90 border-2 border-dashed border-amber-600/90 dark:bg-amber-500/20 dark:border-amber-400 animate-pulse'
             : 'bg-[#E9DCC7] dark:bg-[#1E1712] dark:border dark:border-[#2C2119]',
       ].join(' ')}
-      style={{
-        boxShadow: isLineClearHighlight
-          ? '0 0 12px rgba(245, 158, 11, 0.45)'
-          : 'inset 0 1px 2px rgba(56, 36, 16, 0.14)',
-      }}
     >
       {cell?.kind === 'moss' && <MossTile clearing={isClearingNow} />}
       {cell?.kind === 'flower' && (
@@ -117,6 +114,7 @@ const MemoizedBoardCell = React.memo<MemoizedBoardCellProps>(({
       )}
       {cell?.kind === 'tile' && (
         <ArtisanTile
+          lightweight={!ENABLE_FULL_META}
           material={cell.material}
           tileSkin={tileSkin}
           justPlaced={cell.justPlaced}
@@ -128,12 +126,13 @@ const MemoizedBoardCell = React.memo<MemoizedBoardCellProps>(({
       )}
       {!cell && showValidGhost && previewMaterial && (
         <ArtisanTile
+          lightweight={!ENABLE_FULL_META}
           material={previewMaterial}
           tileSkin={tileSkin}
           ghost
           highlightClear={isLineClearHighlight}
-          special={ghostInfo?.special}
-          hasAcornGem={ghostInfo?.hasAcornGem}
+          special={ghostSpecial}
+          hasAcornGem={ghostHasAcorn}
           className="ring-2 ring-emerald-600/75 dark:ring-amber-300/80"
         />
       )}
@@ -147,9 +146,6 @@ MemoizedBoardCell.displayName = 'MemoizedBoardCell';
 
 const PARTICLE_VECTORS = [
   { px: '-22px', py: '-24px' },
-  { px: '22px', py: '-22px' },
-  { px: '-24px', py: '18px' },
-  { px: '24px', py: '20px' },
 ];
 
 export const GameBoard: React.FC<GameBoardProps> = ({
@@ -196,18 +192,17 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   return (
     <div className="relative flex items-center justify-center w-full">
       <div
-        key={shakeKey > 0 ? `shake_${shakeKey}` : 'steady'}
-        className={`w-full max-w-[min(430px,calc(100dvh-365px))] max-h-[min(430px,calc(100dvh-365px))] aspect-square p-1.5 sm:p-3.5 rounded-2xl border transition-colors duration-200
+        className={`w-full max-w-[clamp(180px,calc(100dvh-365px),430px)] max-h-[clamp(180px,calc(100dvh-365px),430px)] aspect-square p-1.5 sm:p-3.5 rounded-2xl border transition-colors duration-200
           bg-[#DEC9A8] border-[#C4A882] shadow-[0_10px_28px_-8px_rgba(45,28,12,0.28),inset_0_2px_2px_rgba(255,250,240,0.65)]
           dark:bg-[#19130E] dark:border-[#3A2B1F] dark:shadow-[0_12px_32px_-8px_rgba(0,0,0,0.85),inset_0_1px_1px_rgba(245,190,110,0.12)] ${
-            shakeKey > 0 ? 'animate-board-shake' : ''
+            shakeKey > 0 ? (shakeKey % 2 ? 'animate-board-shake' : 'animate-board-shake-alt') : ''
           }`}
       >
         <div
           ref={boardRef}
           data-testid="game-board"
           data-board-shape={boardShape}
-          className="relative grid grid-cols-8 grid-rows-8 gap-1 sm:gap-1.5 w-full h-full p-1.5 rounded-xl
+          className="relative touch-none select-none grid grid-cols-8 grid-rows-8 gap-1 sm:gap-1.5 w-full h-full p-1.5 rounded-xl
             bg-[#C9B18D] dark:bg-[#0D0A08]
             shadow-[inset_0_2px_6px_rgba(62,40,18,0.25)] dark:shadow-[inset_0_2px_8px_rgba(0,0,0,0.9)]"
           style={{ contain: "layout paint style" }}
@@ -229,14 +224,15 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                   c={c}
                   boardShape={boardShape}
                   cell={cell}
-                  ghostInfo={ghostInfo}
+                  ghostSpecial={ghostInfo?.special}
+                  ghostHasAcorn={ghostInfo?.hasAcornGem}
                   showValidGhost={Boolean(isPreviewTarget && preview?.valid && previewMaterial)}
                   showInvalidGhost={Boolean(isPreviewTarget && preview && !preview.valid)}
                   isClearingNow={clearingKeys.has(key)}
                   isLineClearHighlight={isLineClearHighlight}
                   isHookTarget={Boolean(!cell && firstMoveHookActive && HOOK_TARGET_SET.has(key))}
                   canTapToPlace={canTapToPlace}
-                  previewMaterial={previewMaterial}
+                  previewMaterial={isPreviewTarget ? previewMaterial : null}
                   tileSkin={tileSkin}
                   onCellClick={onCellClick}
                 />
@@ -250,7 +246,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               aria-hidden="true"
               className="pointer-events-none absolute inset-0 overflow-hidden z-20"
             >
-              {particleBursts.map((burst) => (
+              {particleBursts.slice(0, 8).map((burst) => (
                 <div
                   key={burst.id}
                   style={{

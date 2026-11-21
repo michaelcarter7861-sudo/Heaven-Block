@@ -1,3 +1,4 @@
+import { ENABLE_FULL_META } from './src/game/features.ts';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import fs from 'fs';
@@ -7,6 +8,7 @@ import {VitePWA} from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
   return {
+    base: './',
     plugins: [
       react(),
       tailwindcss(),
@@ -26,11 +28,11 @@ export default defineConfig(() => {
           'privacy.html',
         ],
         manifest: {
-          id: '/',
-          name: 'HavenBlocks: Cozy Room & Garden',
+          id: './',
+          name: 'HavenBlocks',
           short_name: 'HavenBlocks',
           description:
-            'Tactical cozy artisan block-puzzle with handcrafted materials, Cozy Pocket reserve slot, Combo-Earned Rotation, Tactical Undo, and Cozy Room restoration.',
+            'An honest 8×8 block puzzle with Endless Zen, Daily Honest Seed, and zero forced ads.',
           lang: 'en',
           dir: 'ltr',
           categories: ['games', 'puzzle'],
@@ -39,42 +41,42 @@ export default defineConfig(() => {
           background_color: '#F6EFE4',
           display: 'standalone',
           orientation: 'portrait',
-          start_url: '/',
-          scope: '/',
+          start_url: './',
+          scope: './',
           launch_handler: {
             client_mode: 'focus-existing',
           },
           shortcuts: [
             {
-              name: 'Daily Haven Puzzle',
+              name: 'Daily Honest Seed',
               short_name: 'Daily Puzzle',
               description: "Play today's deterministic date-seeded board",
-              url: '/?daily=1',
-              icons: [{ src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' }],
+              url: './?daily=1',
+              icons: [{ src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' }],
             },
-            {
+            ...(ENABLE_FULL_META ? [{
               name: 'My Cozy Haven',
               short_name: 'My Haven',
               description: 'Decorate your rooms and visit your companion pet',
-              url: '/?haven=1',
-              icons: [{ src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' }],
-            },
+              url: './?haven=1',
+              icons: [{ src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' }],
+            }] : []),
           ],
           icons: [
             {
-              src: '/pwa-192x192.png',
+              src: 'pwa-192x192.png',
               sizes: '192x192',
               type: 'image/png',
               purpose: 'any',
             },
             {
-              src: '/pwa-512x512.png',
+              src: 'pwa-512x512.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'any',
             },
             {
-              src: '/pwa-maskable-512x512.png',
+              src: 'pwa-maskable-512x512.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'maskable',
@@ -82,7 +84,7 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,ogg,txt}'],
           cleanupOutdatedCaches: true,
           clientsClaim: true,
           skipWaiting: true,
@@ -99,8 +101,8 @@ export default defineConfig(() => {
           if (error) {
             return;
           }
-          const distDir = path.resolve(__dirname, 'dist');
-          const srcAssets = path.resolve(__dirname, 'src/assets');
+          const distDir = path.resolve(import.meta.dirname, 'dist');
+          const srcAssets = path.resolve(import.meta.dirname, 'src/assets');
           const distAssets = path.resolve(distDir, 'src/assets');
           if (fs.existsSync(distDir) && fs.existsSync(srcAssets)) {
             fs.cpSync(srcAssets, distAssets, {recursive: true, force: true});
@@ -110,7 +112,7 @@ export default defineConfig(() => {
     ],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(import.meta.dirname, '.'),
       },
     },
     server: {
