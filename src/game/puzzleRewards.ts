@@ -1,7 +1,7 @@
 import { isAdMobAvailable } from './admob';
 import { showRewardedAd, type RewardedAdResult } from './monetization';
 
-export type PuzzleReward = 'UNDO' | 'REVIVE_CLEAR_3X3';
+export type PuzzleReward = 'UNDO' | 'ROTATE' | 'REVIVE_CLEAR_3X3' | 'DOUBLE_DAILY_SCORE' | 'POCKET_SKIP';
 
 declare global {
   interface Window {
@@ -35,4 +35,15 @@ export async function requestPuzzleReward(
   } finally {
     pending = false;
   }
+}
+
+/** Shared opt-in entry point. Callers keep rewards scoped to the requesting run. */
+export async function requestRewardedAd(
+  placement: PuzzleReward,
+  onReward: () => void,
+  options?: { noAdsOwned?: boolean },
+): Promise<RewardedAdResult> {
+  const result = await requestPuzzleReward(placement, options);
+  if (result.rewarded) onReward();
+  return result;
 }

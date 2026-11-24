@@ -453,3 +453,46 @@ html.colorblind-mode .colorblind-material-symbol {
 
 
 
+
+/* V2 ambience lives outside the grid and does not participate in drag updates. */
+[data-conservatory] { --sill-light:#f2c489; --sill-dark:#9b6039; --mist:#f4e7d1; }
+[data-conservatory="rain"] { background:#d7e2dd; color:#233c34; --mist:#c9dbd4; }
+[data-conservatory="candlelight"] { background:#16241f; color:#f6efe4; --mist:#243931; }
+.conservatory-sill { isolation:isolate; position:relative; display:flex; align-items:flex-end; justify-content:center; gap:14px; width:100%; height:48px; border-radius:14px 14px 4px 4px; background:radial-gradient(ellipse at 50% 100%,var(--mist,#f4e7d1),transparent 72%); }
+.conservatory-sill::after { content:""; position:absolute; bottom:0; inset-inline:0; height:7px; border-radius:4px; background:linear-gradient(#f0bc83,var(--sill-dark,#9b6039)); pointer-events:none; }
+.conservatory-hero { height:110px; background:radial-gradient(ellipse at 50% 100%,#587368,#293e38 75%); border:1px solid #b3c3a52d; }
+.ivy { pointer-events:none; position:absolute; top:4px; width:55px; height:49px; z-index:-1; }
+.ivy-left { left:3px; } .ivy-right { right:3px; transform:scaleX(-1); }
+.sill-prop { width:43px; height:42px; flex:none; pointer-events:none; }
+.sill-cat { position:relative; height:47px; width:91px; cursor:pointer; z-index:1; }
+.sill-cat svg { height:100%; width:100%; overflow:visible; }
+.conservatory-hero .sill-cat { height:82px; width:159px; }
+.conservatory-hero .sill-prop { height:64px; width:66px; }
+.cat-tail,.cat-breath { transform-box:fill-box; transform-origin:bottom center; }
+.cat-tail { animation:conservatory-tail 4s ease-in-out infinite; }
+.cat-breath { animation:conservatory-breathe 3.5s ease-in-out infinite; }
+.cat-heart { position:absolute; right:21%; top:12%; color:#d35267; text-shadow:0 1px #fff3; animation:conservatory-heart 850ms ease-out both; pointer-events:none; }
+.sill-flame { opacity:.12; }
+[data-conservatory="candlelight"] .sill-flame { opacity:1; }
+[data-conservatory="candlelight"] .conservatory-sill { background:radial-gradient(ellipse at 67% 98%,#f5b1543d,transparent 70%); }
+.conservatory-rain { position:fixed; inset:0; overflow:hidden; pointer-events:none; }
+.conservatory-rain i { position:absolute; width:1px; height:24px; background:linear-gradient(transparent,#fff8); animation:conservatory-rain 2.6s linear infinite; }
+.sanctuary-controls { display:flex; gap:5px; }
+.sanctuary-controls button { display:grid; place-items:center; width:38px; height:38px; border:1px solid currentColor; border-color:color-mix(in srgb,currentColor 20%,transparent); border-radius:11px; }
+.sanctuary-controls svg { width:16px; height:16px; }
+.power-card { min-width:0; display:flex; flex-direction:column; justify-content:space-between; gap:4px; padding:6px; border-radius:12px; border:1px solid #b69c74; background:#efe4d2; color:#263a31; }
+.power-card button { min-height:29px; display:flex; align-items:center; justify-content:center; gap:3px; padding:2px 3px; border-radius:7px; background:#1f3a34; color:#f6efe4; font-size:9px; line-height:1.05; font-weight:700; white-space:normal; overflow-wrap:anywhere; }
+@media (min-width: 640px) { .power-card button { font-size:11px; } }
+.power-card button:disabled { opacity:.5; cursor:not-allowed; }
+.dark .power-card { background:#241b14; color:#f6e2c7; border-color:#4b3b2b; }
+.dark .power-card button { background:#d2a16b; color:#17241e; }
+@keyframes conservatory-tail { 50% { transform:rotate(7deg); } }
+@keyframes conservatory-breathe { 50% { transform:scaleY(1.026); } }
+@keyframes conservatory-heart { from { transform:translateY(0) scale(.65); } to { transform:translateY(-25px) scale(1.2); opacity:0; } }
+@keyframes conservatory-rain { from { transform:translate3d(8px,-55px,0) rotate(16deg); opacity:0; } 40% { opacity:.8; } to { transform:translate3d(-15px,80px,0) rotate(16deg); opacity:0; } }
+@media(prefers-reduced-motion:reduce) { .cat-breath,.cat-tail,.conservatory-rain i { animation:none; } .cat-heart { animation-duration:120ms; } }
+.cat-nap-marker { position:absolute; inset:2px; z-index:2; display:grid; place-items:center; pointer-events:none; border-radius:8px; border:1px dashed #c1844b; background:#e8b77940; }
+.cat-nap-marker svg { width:90%; height:90%; }
+.reduced-motion-pref .cat-breath,.reduced-motion-pref .cat-tail,.reduced-motion-pref .conservatory-rain i { animation:none; }
+[data-conservatory="candlelight"] [data-testid="game-board"] { background:#23352c; border-color:#46574a; }
+[data-conservatory="candlelight"] [data-cell-kind="empty"] { background-color:#35453b; border-color:#49594e; }

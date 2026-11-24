@@ -53,7 +53,7 @@ test('buildProgressiveCascadeNotes transposes frequencies upward and adds notes 
   assert.equal(highStep < lowStep, true);
 });
 
-test('sample player reuses local clips and stops rain on mute or background', () => {
+test('sample player reuses local clips and keeps rain independent from SFX', () => {
   const created: MockAudio[] = [];
   class MockAudio {
     paused = true;
@@ -82,7 +82,14 @@ test('sample player reuses local clips and stops rain on mute or background', ()
     assert.equal(rain.paused, true);
     cozyAudio.resume();
     assert.equal(rain.paused, false);
+    cozyAudio.playCat();
+    const meow = created[5];
+    assert.equal(meow.paused, false);
     cozyAudio.setMuted(true);
+    assert.equal(meow.paused, true);
+    assert.equal(rain.paused, false);
+    assert.equal(rain.volume, 0.22);
+    cozyAudio.setAmbientEnabled(false);
     assert.equal(rain.paused, true);
   } finally {
     cozyAudio.setAmbientEnabled(false);

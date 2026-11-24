@@ -1,12 +1,14 @@
+import { settleCatNap, validNapCorner } from './game/catNap';
+import { clampPower, conservatoryTheme, DAILY_MILESTONES, DAILY_TARGET, dailyStreak, getDailyMilestoneProgress, MAX_SPINS, MAX_UNDOS, POCKET_COOLDOWN, START_SPINS } from './game/puzzleEconomy';
+import { ConservatorySill, ConservatoryRain, NappingCat, SanctuaryControls } from './components/Conservatory';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { ENABLE_FULL_META } from './game/features';
-import { requestPuzzleReward, canRequestPuzzleReward } from './game/puzzleRewards';
+import { requestRewardedAd } from './game/puzzleRewards';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Film,
   Flame,
   Gem,
-  HelpCircle,
   Home,
   Inbox,
   LayoutGrid,
@@ -123,6 +125,7 @@ import {
   applyPlacement,
   applyReviveClear3x3,
   checkHasAnyPlayableMove,
+  canPlacePieceAnywhere,
   cloneGrid,
   generateSolvableTray,
   previewPlacement,
@@ -430,7 +433,7 @@ export default function App() {
       generateSolvableTray(
         grid,
         null,
-        ENABLE_FULL_META ? 1 : 0,
+        START_SPINS,
         rngRef.current,
         getTrayOptionsForLevel(activeLevelDef, initDda)
       )
@@ -465,14 +468,15 @@ export default function App() {
     () => (duelParam ? 0 : initialSaved.activeRun?.bonusStarsEarned ?? 0)
   );
   const [rotateCharges, setRotateCharges] = useState<number>(
-    () => ((duelParam ? undefined : initialSaved.activeRun?.rotateCharges) ?? (ENABLE_FULL_META ? 1 : 0))
-  );
-  const [rotateGaugePct, setRotateGaugePct] = useState<number>(
-    () => (duelParam ? 0 : initialSaved.activeRun?.rotateGaugePct ?? 0)
+    () => clampPower(duelParam ? undefined : initialSaved.activeRun?.rotateCharges, MAX_SPINS)
   );
   const [undoCharges, setUndoCharges] = useState<number>(
-    () => (duelParam ? 1 : initialSaved.activeRun?.undoCharges ?? 1)
+    () => clampPower(duelParam ? undefined : initialSaved.activeRun?.undoCharges, MAX_UNDOS)
   );
+  const [pocketCooldown, setPocketCooldown] = useState(() => duelParam ? 0 : clampPower(initialSaved.activeRun?.pocketCooldown, POCKET_COOLDOWN, 0));
+  const [catNap, setCatNap] = useState(() => duelParam ? null : validNapCorner(initialSaved.activeRun?.catNap));
+  const [reviveUsed, setReviveUsed] = useState(() => !duelParam && initialSaved.activeRun?.reviveUsed === true);
+  const [dailyBonusDoubled, setDailyBonusDoubled] = useState(() => !duelParam && initialSaved.activeRun?.dailyBonusDoubled === true);
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>(
     () => (duelParam ? [] : initialSaved.activeRun?.undoStack ?? [])
   );
@@ -511,7 +515,7 @@ export default function App() {
   } | null>(null);
   const dragFrameRef = useRef<number | null>(null);
   const boardRef = useRef<HTMLDivElement | null>(null);
-  const pocketRef = useRef<HTMLButtonElement | null>(null);
+  const pocketRef = useRef<HTMLDivElement | null>(null);
   const dragGhostRef = useRef<HTMLDivElement | null>(null);
   const mountDragGhost = useCallback((node: HTMLDivElement | null) => {
     dragGhostRef.current = node;
@@ -538,9 +542,12 @@ export default function App() {
     return subscribeRewardedAd((status) => setAdStatus(status));
   }, []);
 
-  // Dismiss native Android 12+ SplashScreen once React is mounted
+  // Keep the branded splash visible for roughly 900ms, then fade out natively.
   useEffect(() => {
-    void hideNativeSplashScreen();
+    const timer = window.setTimeout(() => {
+      void hideNativeSplashScreen();
+    }, 900);
+    return () => window.clearTimeout(timer);
   }, []);
 
   // Refresh UMP consent on every native app launch. The AdMob SDK and
@@ -641,9 +648,12 @@ export default function App() {
             acornGemsCollected,
             bonusStarsEarned,
             rotateCharges,
-            rotateGaugePct,
             undoCharges,
             undoStack,
+            pocketCooldown,
+            catNap,
+            reviveUsed,
+            dailyBonusDoubled,
             seedCode,
             rngState: rngRef.current.getState(),
           },
@@ -693,9 +703,12 @@ export default function App() {
     acornGemsCollected,
     bonusStarsEarned,
     rotateCharges,
-    rotateGaugePct,
     undoCharges,
     undoStack,
+    pocketCooldown,
+    catNap,
+    reviveUsed,
+    dailyBonusDoubled,
     seedCode,
   ]);
 
@@ -852,7 +865,7 @@ export default function App() {
       triggerHaptic('warning');
       cozyAudio.playUiTick('gameover');
       const resolvedScore = finalScoreOverride ?? score;
-      if (mode === 'duel' && isDailyPuzzleSeed(seedCode) && resolvedScore > 0) {
+      if (mode === 'duel' && isDailyPuzzleSeed(seedCode) && resolvedScore >= DAILY_TARGET) {
         const dailyOut = recordDailyPuzzleRun({
           seedCode,
           score: resolvedScore,
@@ -936,7 +949,7 @@ export default function App() {
                 generateSolvableTray(
                   freshGrid,
                   null,
-                  ENABLE_FULL_META ? 1 : 0,
+                  START_SPINS,
                   rng,
                   getTrayOptionsForLevel(def, ddaBoost)
                 )
@@ -962,9 +975,12 @@ export default function App() {
       setSeedPackAwardedThisRun(false);
       setPreLossStreak(0);
       lossRecordedRef.current = false;
-      setRotateCharges(ENABLE_FULL_META ? 1 : 0);
-      setRotateGaugePct(0);
-      setUndoCharges(1);
+      setRotateCharges(START_SPINS);
+      setUndoCharges(MAX_UNDOS);
+      setPocketCooldown(0);
+      setCatNap(null);
+      setReviveUsed(false);
+      setDailyBonusDoubled(false);
       setUndoStack([]);
       setClearingKeys(new Set());
       setParticleBursts([]);
@@ -1092,10 +1108,10 @@ export default function App() {
         mossCleared,
         acornGemsCollected,
         bonusStarsEarned,
-        rotateCharges,
-        rotateGaugePct,
         selectedSource,
         rngState: rngRef.current.getState(),
+        pocketCooldown,
+        catNap,
         bestCombo,
       };
 
@@ -1105,11 +1121,24 @@ export default function App() {
         anchorRow,
         anchorCol,
         combo,
-        rotateGaugePct,
         rngRef.current
       );
 
-      const nextScore = score + outcome.totalScoreGained;
+      const napResult = mode === 'zen'
+        ? settleCatNap(outcome.nextGrid, catNap, movesPlaced + 1, outcome.clearedRows, outcome.clearedCols)
+        : { nap: null, bonus: 0 };
+      setCatNap(napResult.nap);
+      const nextScore = score + outcome.totalScoreGained + napResult.bonus;
+      const reachedDailyMilestone = mode === 'duel' && isDailyPuzzleSeed(seedCode)
+        ? DAILY_MILESTONES.filter((target) => score < target && nextScore >= target).at(-1)
+        : undefined;
+      if (reachedDailyMilestone !== undefined) {
+        const completion = recordDailyPuzzleRun({ seedCode, score: nextScore, completedDailyDates, dailyBestScore });
+        setCompletedDailyDates(completion.nextCompletedDailyDates);
+        setDailyBestScore(completion.nextDailyBestScore);
+        cozyAudio.playRewardChime();
+      }
+      if (outcome.totalClearedLines > 0 || outcome.nextCombo >= 2) cozyAudio.playPurr();
       const nextBestScore = Math.max(bestScore, nextScore);
       const nextBestCombo = Math.max(bestCombo, outcome.nextCombo);
       const nextLines = linesCleared + outcome.totalClearedLines;
@@ -1117,7 +1146,8 @@ export default function App() {
       const nextMoss = mossCleared + outcome.mossCleared;
       const nextAcorns = acornGemsCollected + outcome.acornGemsCollected;
       const nextBonusStars = bonusStarsEarned + outcome.bonusFlowerStars;
-      const nextRotateCharges = rotateCharges + outcome.earnedRotateCharges;
+      const nextRotateCharges = rotateCharges;
+      const nextPocketCooldown = Math.max(0, pocketCooldown - 1);
 
       if (mode === 'duel') {
         setDuelBestScore((prev) => Math.max(prev, nextScore));
@@ -1219,7 +1249,6 @@ export default function App() {
         if (outcome.sproutedCells.length > 0) parts.push('Bloom Sprouted!');
         if (outcome.bonusFlowerStars > 0)
           parts.push(`+${outcome.bonusFlowerStars}★ Flower`);
-        if (outcome.earnedRotateCharges > 0) parts.push('+1 Rotate');
 
         const mainLabel =
           outcome.cascadeCount > 0
@@ -1232,6 +1261,14 @@ export default function App() {
         showBanner(mainLabel, parts.length > 0 ? parts.join(' · ') : undefined);
       }
 
+      if (reachedDailyMilestone !== undefined) {
+        const milestoneIndex = DAILY_MILESTONES.indexOf(reachedDailyMilestone) + 1;
+        showBanner(reachedDailyMilestone === DAILY_TARGET ? 'Daily Goal Complete ✓' : `Daily Milestone ${milestoneIndex} ✓`, `${reachedDailyMilestone.toLocaleString()} points reached`);
+      }
+      if (napResult.bonus) {
+        cozyAudio.playPurr();
+        showBanner('Cat Nap bonus', '+250 points');
+      }
       setUndoStack((prev) => [...prev.slice(-(MAX_UNDO_HISTORY - 1)), snapshot]);
       setGrid(outcome.nextGrid);
       setTray(nextTray);
@@ -1246,7 +1283,7 @@ export default function App() {
       setAcornGemsCollected(nextAcorns);
       setBonusStarsEarned(nextBonusStars);
       setRotateCharges(nextRotateCharges);
-      setRotateGaugePct(outcome.nextRotateGaugePct);
+      setPocketCooldown(nextPocketCooldown);
       setHoverCell(null);
       setSelectedSource(getFirstAvailableSource(nextTray, nextPocket));
       setLifetimeStats((prev) => ({
@@ -1326,7 +1363,8 @@ export default function App() {
         outcome.nextGrid,
         nextTray,
         nextPocket,
-        nextRotateCharges
+        nextRotateCharges,
+        nextPocketCooldown === 0
       );
       if (!hasMove) {
         triggerGameOverState(nextScore);
@@ -1346,10 +1384,14 @@ export default function App() {
       acornGemsCollected,
       bonusStarsEarned,
       rotateCharges,
-      rotateGaugePct,
+      pocketCooldown,
+      catNap,
       selectedSource,
       bestScore,
       bestCombo,
+      seedCode,
+      completedDailyDates,
+      dailyBestScore,
       mode,
       activeLevelDef,
       levelNumber,
@@ -1407,6 +1449,10 @@ export default function App() {
 
   const moveTrayPieceToPocket = useCallback(
     (trayIndex: number) => {
+      if (pocketCooldown > 0) {
+        showBanner('Pocket resting', `Place ${pocketCooldown} more ${pocketCooldown === 1 ? 'piece' : 'pieces'}`);
+        return;
+      }
       const incoming = tray[trayIndex];
       if (!incoming) return;
 
@@ -1433,6 +1479,7 @@ export default function App() {
       triggerHaptic('light');
       setTray(nextTray);
       setPocket(nextPocket);
+      setPocketCooldown(POCKET_COOLDOWN);
       setSelectedSource(
         previousPocket ? { kind: 'tray', index: trayIndex } : { kind: 'pocket' }
       );
@@ -1454,6 +1501,7 @@ export default function App() {
     [
       tray,
       pocket,
+      pocketCooldown,
       grid,
       rotateCharges,
       activeLevelDef,
@@ -1469,7 +1517,7 @@ export default function App() {
   const handleRotateSelected = useCallback(() => {
     if (phase !== 'playing' || dragSessionRef.current) return;
     if (rotateCharges <= 0) {
-      showBanner('Need Rotate Charge', 'Clear 2+ lines or build a 2× combo');
+      showBanner('No Spins left', 'Use the optional reward to refill');
       return;
     }
 
@@ -1512,6 +1560,7 @@ export default function App() {
 
     if (latest.rngState !== undefined) rngRef.current = mulberry32(latest.rngState);
     if (latest.bestCombo !== undefined) setBestCombo(latest.bestCombo);
+    setCatNap(validNapCorner(latest.catNap));
     setGrid(latest.grid);
     setTray(latest.tray);
     setPocket(latest.pocket);
@@ -1522,8 +1571,8 @@ export default function App() {
     setMossCleared(latest.mossCleared);
     setAcornGemsCollected(latest.acornGemsCollected);
     setBonusStarsEarned(latest.bonusStarsEarned);
-    setRotateCharges(latest.rotateCharges);
-    setRotateGaugePct(latest.rotateGaugePct);
+    // Undo restores the board/run state, not Spin inventory spent or granted after the move.
+    setPocketCooldown((current) => Math.max(current, clampPower(latest.pocketCooldown, POCKET_COOLDOWN, 0)));
     setSelectedSource(
       latest.selectedSource ?? getFirstAvailableSource(latest.tray, latest.pocket)
     );
@@ -1549,108 +1598,117 @@ export default function App() {
     rewardContextRef.current = { phase, grid, tray, pocket };
   }
 
-  const handleRechargeUndo = useCallback(async () => {
-    if (!monetization.noAdsBundlePurchased) {
-      showBanner('Preparing rewarded ad…', 'Optional Undo refill');
-    }
-    if (dragSessionRef.current) return;
+  const handlePowerReward = useCallback(async (placement: 'UNDO' | 'ROTATE') => {
+    if (phase !== 'playing' || dragSessionRef.current) return;
+    if (placement === 'UNDO' ? undoCharges > 0 : rotateCharges > 0) return;
     const context = rewardContextRef.current;
-    const res = await requestPuzzleReward('UNDO', {
-      noAdsOwned: monetization.noAdsBundlePurchased,
-    });
-    if (context !== rewardContextRef.current) return;
-    if (!res.rewarded) {
-      showBanner('Rewarded ad unavailable', res.message ?? 'Please try again later.');
-      return;
-    }
-    setUndoCharges((c) => Math.max(c, 1));
-    cozyAudio.playRewardChime();
-    showBanner('+1 Undo Rewarded', res.skippedAsVip ? 'VIP Ad-Free' : undefined);
-  }, [monetization.noAdsBundlePurchased, showBanner]);
+    showBanner('Preparing optional reward…');
+    const res = await requestRewardedAd(placement, () => {
+      if (context !== rewardContextRef.current) return;
+      if (placement === 'UNDO') setUndoCharges(MAX_UNDOS);
+      else setRotateCharges(MAX_SPINS);
+      cozyAudio.playRewardChime();
+      showBanner(placement === 'UNDO' ? '+1 Undo' : '+2 Spins');
+    }, { noAdsOwned: monetization.noAdsBundlePurchased });
+    if (!res.rewarded && context === rewardContextRef.current) showBanner(res.message ?? 'Reward unavailable');
+  }, [phase, undoCharges, rotateCharges, monetization.noAdsBundlePurchased, showBanner]);
 
-  const handleRewardRotate = useCallback(async () => {
-    if (!monetization.noAdsBundlePurchased) {
-      showBanner('Preparing rewarded ad…', 'Connecting to Google AdMob');
-    }
-    const res = await showRewardedAd('ROTATE', {
-      noAdsOwned: monetization.noAdsBundlePurchased,
-    });
-    if (!res.rewarded) {
-      showBanner('Rewarded ad unavailable', res.message ?? 'Please try again later.');
-      return;
-    }
-    setRotateCharges((c) => c + 1);
-    cozyAudio.playRewardChime();
-    showBanner('+1 Rotate Rewarded', res.skippedAsVip ? 'VIP Ad-Free' : undefined);
-  }, [monetization.noAdsBundlePurchased, showBanner]);
+  const handlePocketSkip = useCallback(async () => {
+    if (phase !== 'playing' || dragSessionRef.current || pocketCooldown <= 0) return;
+    const context = rewardContextRef.current;
+    showBanner('Preparing optional reward…');
+    const res = await requestRewardedAd('POCKET_SKIP', () => {
+      if (context !== rewardContextRef.current) return;
+      setPocketCooldown(0);
+      cozyAudio.playRewardChime();
+      showBanner('Pocket Ready', 'Cooldown skipped');
+    }, { noAdsOwned: monetization.noAdsBundlePurchased });
+    if (!res.rewarded && context === rewardContextRef.current) showBanner(res.message ?? 'Reward unavailable');
+  }, [phase, pocketCooldown, monetization.noAdsBundlePurchased, showBanner]);
+
+  const handleDoubleDailyBest = useCallback(async () => {
+    if (phase !== 'gameover' || mode !== 'duel' || !isDailyPuzzleSeed(seedCode) || dailyBonusDoubled || Math.floor(score) < DAILY_TARGET) return;
+    showBanner('Preparing optional reward…', 'Doubles the recorded Daily best');
+    const res = await requestRewardedAd('DOUBLE_DAILY_SCORE', () => {
+      if (rewardContextRef.current.phase !== 'gameover') return;
+      setDailyBestScore((current) => Math.floor(Math.max(0, current)) * 2);
+      setDailyBonusDoubled(true);
+      cozyAudio.playRewardChime();
+      showBanner('Daily Best doubled', 'Recorded Daily result updated');
+    }, { noAdsOwned: monetization.noAdsBundlePurchased });
+    if (!res.rewarded) showBanner(res.message ?? 'Reward unavailable');
+  }, [phase, mode, seedCode, dailyBonusDoubled, score, dailyBestScore, monetization.noAdsBundlePurchased, showBanner]);
 
   const handleReviveClear3x3 = useCallback(async () => {
+    if (reviveUsed || phase !== 'gameover') return;
     setReviveStatus('Preparing optional reward…');
     const context = rewardContextRef.current;
-    const res = await requestPuzzleReward('REVIVE_CLEAR_3X3', {
-      noAdsOwned: monetization.noAdsBundlePurchased,
-    });
-    if (context !== rewardContextRef.current) return;
-    if (!res.rewarded) {
-      setReviveStatus(res.message ?? 'Rewarded ad unavailable. Please try again later.');
-      return;
-    }
+    const res = await requestRewardedAd('REVIVE_CLEAR_3X3', () => {
+      if (context !== rewardContextRef.current) return;
+      setReviveUsed(true);
+      setViewFinalBoard(false);
+      const { nextGrid, clearedCells } = applyReviveClear3x3(grid);
+      const bursts: ClearedParticleBurst[] = clearedCells.map((cell) => ({
+        id: `revive_${Date.now()}_${cell.r}_${cell.c}`,
+        r: cell.r,
+        c: cell.c,
+        colorHex: '#F59E0B',
+        accentHex: '#FEF3C7',
+      }));
 
-    const { nextGrid, clearedCells } = applyReviveClear3x3(grid);
-    const bursts: ClearedParticleBurst[] = clearedCells.map((cell) => ({
-      id: `revive_${Date.now()}_${cell.r}_${cell.c}`,
-      r: cell.r,
-      c: cell.c,
-      colorHex: '#F59E0B',
-      accentHex: '#FEF3C7',
-    }));
-
-    let nextTray = tray;
-    const stillPlayable = checkHasAnyPlayableMove(
-      nextGrid,
-      nextTray,
-      pocket,
-      rotateCharges
-    );
-    if (!stillPlayable) {
-      const ddaBoost = mode === 'story' && (levelLosses[levelNumber] ?? 0) >= 2;
-      nextTray = toTraySlots(
-        generateSolvableTray(
-          nextGrid,
-          pocket,
-          rotateCharges,
-          rngRef.current,
-          getTrayOptionsForLevel(activeLevelDef, ddaBoost)
-        )
+      let nextTray = tray;
+      const stillPlayable = checkHasAnyPlayableMove(
+        nextGrid,
+        nextTray,
+        pocket,
+        rotateCharges,
+        pocketCooldown === 0
       );
-      setTrayWaveId((w) => w + 1);
-    }
+      if (!stillPlayable) {
+        const ddaBoost = mode === 'story' && (levelLosses[levelNumber] ?? 0) >= 2;
+        nextTray = toTraySlots(
+          generateSolvableTray(
+            nextGrid,
+            pocket,
+            rotateCharges,
+            rngRef.current,
+            getTrayOptionsForLevel(activeLevelDef, ddaBoost)
+          )
+        );
+        setTrayWaveId((w) => w + 1);
+      }
 
-    if (preLossStreak > 0) {
-      setFireflyStreak(preLossStreak);
-      setPreLossStreak(0);
-    }
-    lossRecordedRef.current = false;
+      if (preLossStreak > 0) {
+        setFireflyStreak(preLossStreak);
+        setPreLossStreak(0);
+      }
+      lossRecordedRef.current = false;
 
-    setGrid(nextGrid);
-    setTray(nextTray);
-    setParticleBursts(bursts);
-    if (particleTimerRef.current) window.clearTimeout(particleTimerRef.current);
-    particleTimerRef.current = window.setTimeout(() => setParticleBursts([]), 520);
-    if (settings.screenShakeEnabled) {
-      setBoardShakeKey((k) => k + 1);
-    }
-    document.body.dataset.state = 'playing';
-    setPhase('playing');
-    triggerHaptic('success');
-    cozyAudio.playRewardChime();
-    showBanner(
-      '3×3 Zone Cleared!',
-      preLossStreak > 0
-        ? `Revive Active · ${preLossStreak}/5 Streak Saved`
-        : 'Revive Bonus Active'
-    );
+      setGrid(nextGrid);
+      setTray(nextTray);
+      setSelectedSource(getFirstAvailableSource(nextTray, pocket));
+      setParticleBursts(bursts);
+      if (particleTimerRef.current) window.clearTimeout(particleTimerRef.current);
+      particleTimerRef.current = window.setTimeout(() => setParticleBursts([]), 520);
+      if (settings.screenShakeEnabled) {
+        setBoardShakeKey((k) => k + 1);
+      }
+      document.body.dataset.state = 'playing';
+      setPhase('playing');
+      triggerHaptic('success');
+      cozyAudio.playRewardChime();
+      showBanner(
+        '3×3 Zone Cleared!',
+        preLossStreak > 0
+          ? `Revive Active · ${preLossStreak}/5 Streak Saved`
+          : 'Revive Bonus Active'
+      );
+    }, { noAdsOwned: monetization.noAdsBundlePurchased });
+    if (!res.rewarded && context === rewardContextRef.current) setReviveStatus(res.message ?? "Reward unavailable");
   }, [
+    reviveUsed,
+    phase,
+    pocketCooldown,
     monetization.noAdsBundlePurchased,
     grid,
     tray,
@@ -1968,9 +2026,12 @@ export default function App() {
       setMossCleared(next.activeRun.mossCleared);
       setAcornGemsCollected(next.activeRun.acornGemsCollected);
       setBonusStarsEarned(next.activeRun.bonusStarsEarned);
-      setRotateCharges(next.activeRun.rotateCharges);
-      setRotateGaugePct(next.activeRun.rotateGaugePct);
-      setUndoCharges(next.activeRun.undoCharges);
+      setRotateCharges(clampPower(next.activeRun.rotateCharges, MAX_SPINS));
+      setPocketCooldown(clampPower(next.activeRun.pocketCooldown, POCKET_COOLDOWN, 0));
+      setReviveUsed(next.activeRun.reviveUsed === true);
+      setDailyBonusDoubled(next.activeRun.dailyBonusDoubled === true);
+      setCatNap(validNapCorner(next.activeRun.catNap));
+      setUndoCharges(clampPower(next.activeRun.undoCharges, MAX_UNDOS));
       setUndoStack(next.activeRun.undoStack);
       rngRef.current = mulberry32(next.activeRun.rngState);
       setHasSavedRunFlag(next.activeRun.movesPlaced > 0);
@@ -2056,9 +2117,12 @@ export default function App() {
     setMossCleared(0);
     setAcornGemsCollected(0);
     setBonusStarsEarned(0);
-    setRotateCharges(ENABLE_FULL_META ? 1 : 0);
-    setRotateGaugePct(0);
-    setUndoCharges(1);
+    setRotateCharges(START_SPINS);
+    setUndoCharges(MAX_UNDOS);
+    setPocketCooldown(0);
+    setCatNap(null);
+    setReviveUsed(false);
+    setDailyBonusDoubled(false);
     setUndoStack([]);
     setSelectedSource(null);
     setHasSavedRunFlag(false);
@@ -2462,12 +2526,12 @@ export default function App() {
 
   const handlePocketClick = useCallback(() => {
     if (phase !== 'playing') return;
-    if (selectedSource?.kind === 'tray' && tray[selectedSource.index]) {
+    if (pocketCooldown === 0 && selectedSource?.kind === 'tray' && tray[selectedSource.index]) {
       moveTrayPieceToPocket(selectedSource.index);
     } else if (pocket) {
       setSelectedSource({ kind: 'pocket' });
     }
-  }, [phase, selectedSource, tray, pocket, moveTrayPieceToPocket]);
+  }, [phase, selectedSource, tray, pocket, pocketCooldown, moveTrayPieceToPocket]);
 
   const startPieceDrag = useCallback(
     (e: React.PointerEvent, source: PieceSource, piece: PieceInstance) => {
@@ -2500,6 +2564,10 @@ export default function App() {
     [phase]
   );
 
+  const catCurious = useMemo(() => phase === 'playing' && movesPlaced > 0 && tray.some(
+    piece => piece && !canPlacePieceAnywhere(grid, piece, rotateCharges),
+  ), [phase, movesPlaced, tray, grid, rotateCharges]);
+
   const nativeRuntime = isNativePlatform();
 
   if (phase === 'title') {
@@ -2513,23 +2581,29 @@ export default function App() {
     return (
       <>
         {!ENABLE_FULL_META ? (
-          <main className="min-h-dvh flex items-center justify-center p-5 bg-[#F6EFE4] text-[#1E3A2F] dark:bg-[#191410] dark:text-amber-100">
-            <section className="w-full max-w-md space-y-4 rounded-3xl border border-current/20 p-7">
-              <h1 className="font-display text-4xl font-bold">HavenBlocks</h1>
-              <p>An honest 8×8 block puzzle. Zero forced ads. Ads never interrupt a move.</p>
-              <p className="text-sm">Place blocks, clear lines, and beat your best score: <strong>{bestScore.toLocaleString()}</strong>.</p>
-              <p className="text-xs">Fair-Play Seed · Daily <code className="select-all">{getDailyPuzzleSeed()}</code></p>
-              <button className="w-full rounded-xl bg-[#1E3A2F] py-3 font-bold text-white dark:bg-amber-200 dark:text-[#191410]" onClick={handleStartDailyPuzzle}>Daily Honest Seed</button>
-              <button className="w-full rounded-xl border border-current/30 py-3 font-bold" onClick={() => startRun('zen', levelNumber)}>Endless Zen</button>
-              {hasSavedRunFlag && canResumeRun && (
-                <button className="w-full rounded-xl border border-current/30 py-3" onClick={resumeSavedRun}>Resume · {savedLabel}</button>
-              )}
-              <div className="flex flex-wrap gap-4 text-sm underline">
-                <button onClick={() => setNightCandleMode((v) => !v)}>{nightCandleMode ? 'Daylight' : 'Night Candle'}</button>
-                <button onClick={() => setShowSettingsModal(true)}>Settings</button>
-                <button onClick={() => setShowPrivacyModal(true)}>Privacy</button>
-                <PWAInstallButton />
+          <main data-conservatory={conservatoryTheme(0, nightCandleMode)} className="min-h-dvh grid place-items-center bg-[#f4e7d1] p-4 text-[#1f3a34]">
+            <section className="w-full max-w-md space-y-4 rounded-[28px] border border-[#c7b292] bg-[#fcf5e7] p-5 shadow-xl dark:border-[#43574d] dark:bg-[#20362e] dark:text-[#f6efe4]">
+              <header className="space-y-2 text-center">
+                <p className="text-[10px] font-bold uppercase tracking-[.28em]">The Cozy Sanctuary</p>
+                <h1 className="font-display text-5xl font-bold">HavenBlocks</h1>
+                <p className="text-xs">Honest 8×8 puzzles · Zero forced ads</p>
+                <ConservatorySill hero />
+                <p className="text-[10px] font-semibold uppercase tracking-widest">{nightCandleMode ? 'Night Candlelight' : 'Morning Cottage'}</p>
+              </header>
+              <div>
+                <button className="w-full rounded-xl bg-[#1f3a34] py-3.5 font-bold text-[#f6efe4] shadow-md dark:bg-[#d7ac76] dark:text-[#17241e]" onClick={hasSavedRunFlag && canResumeRun ? resumeSavedRun : () => startRun('zen', levelNumber)}>{hasSavedRunFlag && canResumeRun ? 'Resume Game' : 'Play Endless'}</button>
+                {hasSavedRunFlag && canResumeRun && <div className="mt-2 flex items-center justify-between text-xs"><span>{savedLabel}</span><button className="underline" onClick={() => startRun('zen', levelNumber)}>New Run</button></div>}
               </div>
+              <button className="block w-full rounded-2xl border border-current/20 p-3 text-left hover:bg-emerald-500/5" onClick={handleStartDailyPuzzle}>
+                <span className="flex items-center justify-between gap-2"><strong className="font-display text-lg">Daily Honest Seed</strong><span className="text-[11px]">{completedDailyDates.includes(getTodayDateKey()) ? 'Completed ✓' : 'Pending'}</span></span>
+                <span className="mt-1 flex flex-wrap justify-between gap-x-2 text-[10px]"><time>{getTodayDateKey()}</time><span>Fair-Play Seed · <code>{getDailyPuzzleSeed()}</code></span></span>
+              </button>
+              <footer className="space-y-3">
+                <dl className="grid grid-cols-3 divide-x divide-current/15 rounded-xl border border-current/15 py-2 text-center">
+                  {[['Best Score', bestScore], ['Daily Streak', dailyStreak(completedDailyDates)], ['Total Lines', lifetimeStats.totalLinesCleared]].map(([label, value]) => <div key={label}><dt className="text-[10px] font-semibold">{label}</dt><dd className="font-mono-num font-bold">{value.toLocaleString()}</dd></div>)}
+                </dl>
+                <div className="flex items-center justify-between gap-2 text-xs"><SanctuaryControls night={nightCandleMode} muted={muted} onTheme={() => setNightCandleMode(v => !v)} onSound={toggleMute} onSettings={() => setShowSettingsModal(true)} /><PWAInstallButton /></div>
+              </footer>
             </section>
           </main>
         ) : <TitleScreen
@@ -2628,10 +2702,12 @@ export default function App() {
             onRestorePurchases={handleRestorePurchases}
             onRequestAdConsent={handleRequestAdConsent}
             onOpenPrivacyTerms={() => setShowPrivacyModal(true)}
+            onOpenHelp={() => { setShowSettingsModal(false); setShowHelpModal(true); }}
             onResetAllData={handleResetAllData}
             onClose={() => setShowSettingsModal(false)}
           />
         )}
+        {showHelpModal && <HelpModal onClose={() => setShowHelpModal(false)} />}
         {showPrivacyModal && (
           <PrivacyTermsModal onClose={() => setShowPrivacyModal(false)} />
         )}
@@ -2654,7 +2730,7 @@ export default function App() {
     title: string;
     body: string;
   } | null = (() => {
-    if (phase !== 'playing' || appView !== 'puzzle' || showFirstSofaPrompt) {
+    if (!ENABLE_FULL_META || phase !== 'playing' || appView !== 'puzzle' || showFirstSofaPrompt) {
       return null;
     }
     if (
@@ -2697,14 +2773,23 @@ export default function App() {
   })();
 
   // Goal progress metrics
-  const goal = activeLevelDef.goal;
+  const isDailyRun = mode === 'duel' && isDailyPuzzleSeed(seedCode);
+  const dailyMilestoneProgress = isDailyRun ? getDailyMilestoneProgress(score) : null;
+  const goal = isDailyRun
+    ? { ...activeLevelDef.goal, target: dailyMilestoneProgress?.target ?? DAILY_TARGET }
+    : activeLevelDef.goal;
   const currentGoalVal =
     goal.type === 'score'
       ? score
       : goal.type === 'acorn_gems'
         ? acornGemsCollected
         : mossCleared;
-  const goalPct = Math.min(100, Math.round((currentGoalVal / goal.target) * 100));
+  const goalPct = isDailyRun
+    ? Math.round((dailyMilestoneProgress?.progress ?? 0) * 100)
+    : Math.min(100, Math.round((currentGoalVal / goal.target) * 100));
+  const canDoubleDailyBest = Boolean(
+    isDailyRun && score >= DAILY_TARGET && !dailyBonusDoubled && dailyBestScore > 0
+  );
 
   const activeDiffMeta = getLevelDifficultyMeta(activeLevelDef);
   const runStats: RunStats = {
@@ -2743,12 +2828,33 @@ export default function App() {
         ? 'bg-[#F2F3EA] dark:bg-[#090B08]'
         : 'bg-[#F6EFE4] dark:bg-[#080705]';
 
+  const conservatory = conservatoryTheme(score, nightCandleMode);
+
   return (
     <div
+      data-conservatory={conservatory}
       data-puzzle-ambience={puzzleAmbience}
       className={`safe-area-shell min-h-dvh w-full overflow-x-hidden flex flex-col justify-between select-none text-[#2A1F15] dark:text-[#F5EDE1] transition-colors duration-300 ${ambienceBgClass}`}
     >
-      {/* Compact Top HUD */}
+      {conservatory === 'rain' && <ConservatoryRain />}
+      {!ENABLE_FULL_META ? (
+        <header inert={phase === 'gameover'} className="relative mx-auto grid w-full max-w-[620px] gap-1.5 px-3 py-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <button aria-label="Pause game" type="button" className="grid size-10 shrink-0 place-items-center rounded-xl border border-current/20" onClick={() => { if (phase === 'playing' && !dragSessionRef.current) setPhase('paused'); }}><Pause className="size-4" /></button>
+              <span className="min-w-0 truncate font-display font-bold">{mode === 'duel' ? `Daily · ${seedCode.replace(/^DAILY-/, '')}` : 'Endless Zen'}</span>
+            </div>
+            <dl className="flex gap-3 text-right text-[10px] font-semibold">
+              <div><dt>Score</dt><dd data-testid="score-value" className="font-mono-num text-sm">{score.toLocaleString()}</dd></div>
+              <div><dt>Best</dt><dd data-testid="best-score-value" className="font-mono-num text-sm">{runStats.bestScore.toLocaleString()}</dd></div>
+            </dl>
+          </div>
+          <div className="flex items-center justify-between gap-1.5 border-t border-current/15 pt-1">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] font-semibold"><span>Lines: {linesCleared}</span><span className="rounded-full border border-current/20 px-1.5 py-0.5">Fair-Play Seed · <code className="select-all">{seedCode}</code></span></div>
+            <SanctuaryControls night={nightCandleMode} muted={muted} onTheme={() => setNightCandleMode(v => !v)} onSound={toggleMute} onSettings={() => setShowSettingsModal(true)} />
+          </div>
+        </header>
+      ) : (
       <header inert={phase === 'gameover'} className="w-full max-w-5xl mx-auto px-2.5 sm:px-6 pt-2 sm:pt-3.5 pb-1 flex flex-wrap items-center justify-between gap-1.5 sm:gap-2">
         <div className="order-1 flex items-center gap-2 min-w-0 flex-1 sm:flex-initial">
           <button
@@ -2947,17 +3053,6 @@ export default function App() {
             </button>)}
             <button
               type="button"
-              data-testid="hud-help-btn-mobile"
-              onClick={() => setShowHelpModal(true)}
-              aria-label="How to play"
-              className="min-h-[30px] min-w-[28px] flex items-center justify-center rounded-lg border transition-colors
-                bg-[#EFE4D2] border-[#D4C0A3] text-[#2A1F15] hover:bg-[#E5D4BA]
-                dark:bg-[#191410] dark:border-[#3A2B1F] dark:text-[#F5EDE1] dark:hover:bg-[#241C16]"
-            >
-              <HelpCircle className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
               onClick={() => setNightCandleMode((v) => !v)}
               aria-label={
                 nightCandleMode
@@ -3035,17 +3130,6 @@ export default function App() {
           </button>)}
           <button
             type="button"
-            data-testid="hud-help-btn"
-            onClick={() => setShowHelpModal(true)}
-            aria-label="How to play"
-            className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-xl border transition-colors
-              bg-[#EFE4D2] border-[#D4C0A3] text-[#2A1F15] hover:bg-[#E5D4BA]
-              dark:bg-[#191410] dark:border-[#3A2B1F] dark:text-[#F5EDE1] dark:hover:bg-[#241C16]"
-          >
-            <HelpCircle className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
             onClick={() => setNightCandleMode((v) => !v)}
             aria-label={
               nightCandleMode
@@ -3091,6 +3175,8 @@ export default function App() {
           </button>
         </div>
       </header>
+
+      )}
 
       {/* Main Play or Haven Workspace */}
       {appView === 'haven' ? (
@@ -3232,16 +3318,43 @@ export default function App() {
           onPointerLeave={() => setHoverCell(null)}
         >
           {/* Story Goal / Duel Progress Strip */}
-          {mode !== 'zen' && (
+          {isDailyRun ? (
+            <>
+              {dailyMilestoneProgress && dailyMilestoneProgress.completed > 0 && (
+                <p data-testid="daily-goal-complete" className="rounded-full border border-current/20 px-3 py-0.5 text-xs font-bold">{dailyMilestoneProgress?.finished ? 'All Daily Milestones Complete ✓' : 'Daily Goal Complete ✓'}</p>
+              )}
+              {dailyMilestoneProgress && !dailyMilestoneProgress.finished && (
+                <div
+                  data-testid="goal-progress-bar"
+                  className="w-full px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl border bg-[#EFE4D2] border-[#D4C0A3] dark:bg-[#17120E] dark:border-[#36281D]"
+                >
+                  <div className="flex items-center justify-between text-[11px] sm:text-xs font-semibold mb-0.5 sm:mb-1">
+                    <span className="text-[#2A1F15] dark:text-[#F5EDE1]">
+                      {dailyMilestoneProgress.completed === 0
+                        ? 'Daily Haven Target (1,500+)'
+                        : `Daily Milestone ${dailyMilestoneProgress.completed}/4 ✓ · Next ${goal.target.toLocaleString()}`}
+                    </span>
+                    <span className="font-mono-num text-[#1E3A2F] dark:text-amber-300">
+                      {score.toLocaleString()} pts · {goalPct}%
+                    </span>
+                  </div>
+                  <div className="w-full h-1.5 rounded-full overflow-hidden bg-[#D8C5A8] dark:bg-[#2B2017]">
+                    <div
+                      className="h-full rounded-full transition-all duration-300 bg-[#1E3A2F] dark:bg-amber-500"
+                      style={{ width: `${goalPct}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </>
+          ) : mode !== 'zen' && (
             <div
               data-testid="goal-progress-bar"
               className="w-full px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl border bg-[#EFE4D2] border-[#D4C0A3] dark:bg-[#17120E] dark:border-[#36281D]"
             >
               <div className="flex items-center justify-between text-[11px] sm:text-xs font-semibold mb-0.5 sm:mb-1">
                 <span className="text-[#2A1F15] dark:text-[#F5EDE1]">
-                  {mode === 'duel' && isDailyPuzzleSeed(seedCode)
-                    ? `Daily Haven Target (${goal.target.toLocaleString()}+)`
-                    : goal.label}
+                  {goal.label}
                 </span>
                 <span className="font-mono-num text-[#1E3A2F] dark:text-amber-300">
                   {currentGoalVal.toLocaleString()} / {goal.target.toLocaleString()}
@@ -3256,7 +3369,9 @@ export default function App() {
             </div>
           )}
 
+          <ConservatorySill delighted={phase === 'playing' && (combo >= 2 || clearingKeys.size > 0)} curious={catCurious} />
           <GameBoard
+            decoration={mode === 'zen' && catNap && <NappingCat row={catNap.r} col={catNap.c} />}
             boardRef={boardRef}
             boardShape={activeLevelDef.boardShape}
             grid={grid}
@@ -3395,165 +3510,88 @@ export default function App() {
           {/* Anti-Frustration Controls */}
           <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
             {/* Cozy Pocket */}
-            <button
+            <div
               ref={pocketRef}
-              type="button"
-              data-testid="pocket-slot"
-              onClick={handlePocketClick}
-              onPointerDown={(e) => {
-                if (pocket && !canSwapOrPark) {
-                  startPieceDrag(e, { kind: 'pocket' }, pocket);
-                }
-              }}
-              aria-label={
-                pocket
-                  ? `Cozy Pocket holding ${pocket.name}. ${canSwapOrPark ? 'Click to swap with selected tray piece' : 'Drag or tap to place'}`
-                  : canSwapOrPark
-                    ? 'Cozy Pocket empty. Click or drag a piece here to hold'
-                    : 'Cozy Pocket reserve slot empty'
-              }
-              className={`relative flex flex-col items-center justify-between p-1.5 sm:p-2 rounded-xl border min-h-[68px] sm:min-h-[86px] touch-none transition-colors ${
+              data-testid="pocket-card"
+              className={`relative flex min-h-[58px] flex-col items-stretch rounded-xl border p-1.5 transition-colors sm:min-h-[73px] sm:p-2 ${
                 isOverPocket
                   ? 'ring-2 ring-amber-500 bg-amber-100/90 border-amber-500 dark:bg-amber-500/20 dark:border-amber-400'
                   : selectedSource?.kind === 'pocket'
                     ? 'ring-2 ring-[#1E3A2F] dark:ring-amber-400 bg-[#E6D8C0] border-[#B49A75] dark:bg-[#241C16] dark:border-amber-500/60'
-                    : 'bg-[#EFE4D2] border-[#D4C0A3] hover:bg-[#E8D9C1] dark:bg-[#191410] dark:border-[#3A2B1F] dark:hover:bg-[#211A14]'
+                    : 'bg-[#EFE4D2] border-[#D4C0A3] dark:bg-[#191410] dark:border-[#3A2B1F]'
               }`}
             >
-              <div className="w-full flex items-center justify-between text-[10px] font-semibold text-[#6E5A46] dark:text-[#B4A08A]">
-                <span>Pocket</span>
-                <Inbox className="w-3 h-3" />
-              </div>
-
-              <div className="flex-1 flex items-center justify-center py-0.5 sm:py-1">
-                {pocket &&
-                !(
-                  dragSession?.hasMoved &&
-                  dragSession.source.kind === 'pocket'
-                ) ? (
-                  <PiecePreview
-                    piece={pocket}
-                    cellSize={13}
-                    gap={1.5}
-                    tileSkin={activeTileSkin}
-                  />
-                ) : (
-                  <span className="text-[11px] font-medium text-[#8C7760] dark:text-[#786552]">
-                    {canSwapOrPark ? 'Tap / Drop' : 'Hold 1'}
-                  </span>
-                )}
-              </div>
-
-              <div className="text-[10px] font-medium text-[#6E5A46] dark:text-[#B4A08A] whitespace-nowrap">
-                {pocket ? (canSwapOrPark ? 'Swap' : 'Ready') : 'Reserve'}
-              </div>
-            </button>
-
-            {/* Combo-Earned Rotation */}
-            <div className="flex flex-col justify-between p-1.5 sm:p-2 rounded-xl border min-h-[68px] sm:min-h-[86px] bg-[#EFE4D2] border-[#D4C0A3] dark:bg-[#191410] dark:border-[#3A2B1F]">
-              <div className="w-full flex items-center justify-between text-[10px] font-semibold text-[#6E5A46] dark:text-[#B4A08A]">
-                <span>Rotate</span>
-                <span
-                  data-testid="rotate-charges"
-                  className="font-mono-num font-bold text-[#1E3A2F] dark:text-amber-300"
-                >
-                  {rotateCharges}
-                </span>
-              </div>
-
               <button
                 type="button"
-                data-testid="rotate-button"
-                onClick={handleRotateSelected}
-                disabled={rotateCharges <= 0}
-                aria-label={`Rotate selected piece 90 degrees clockwise. ${rotateCharges} charges available`}
-                className={`w-full flex items-center justify-center gap-1 sm:gap-1.5 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition-colors ${
-                  rotateCharges > 0
-                    ? 'bg-[#1E3A2F] text-[#FDF8F2] hover:bg-[#274C3D] active:scale-[0.98] dark:bg-amber-600 dark:text-[#120D08] dark:hover:bg-amber-500'
-                    : 'bg-[#D6C4AA] text-[#7A654F] cursor-not-allowed dark:bg-[#2A2018] dark:text-[#7D6A56]'
-                }`}
+                data-testid="pocket-slot"
+                onClick={handlePocketClick}
+                onPointerDown={(e) => {
+                  if (pocket && (!canSwapOrPark || pocketCooldown > 0)) {
+                    startPieceDrag(e, { kind: 'pocket' }, pocket);
+                  }
+                }}
+                aria-label={
+                  pocket
+                    ? `Cozy Pocket holding ${pocket.name}. ${canSwapOrPark ? 'Click to swap with selected tray piece' : 'Drag or tap to place'}`
+                    : canSwapOrPark
+                      ? 'Cozy Pocket empty. Click or drag a piece here to hold'
+                      : 'Cozy Pocket reserve slot empty'
+                }
+                className="flex min-h-[38px] flex-1 touch-none flex-col items-center justify-between rounded-lg sm:min-h-[49px]"
               >
-                <RotateCw className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                <span>Spin</span>
-              </button>
-
-              <div className="w-full flex items-center justify-between gap-1">
-                <div className="flex-1 h-1.5 rounded-full overflow-hidden bg-[#D8C5A8] dark:bg-[#2C2118]">
-                  <div
-                    className="h-full bg-[#0F766E] dark:bg-amber-400 transition-all duration-200"
-                    style={{ width: `${Math.min(100, rotateGaugePct)}%` }}
-                  />
+                <div className="flex w-full items-center justify-between text-[10px] font-semibold text-[#6E5A46] dark:text-[#B4A08A]">
+                  <span>Pocket</span>
+                  <Inbox className="h-3 w-3" />
                 </div>
-                {ENABLE_FULL_META && (nativeRuntime || monetization.noAdsBundlePurchased) ? (
-                  <button
-                    type="button"
-                    data-testid="ad-reward-rotate"
-                    onClick={handleRewardRotate}
-                    aria-label="Get +1 Rotate Charge"
-                    className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-[#0F766E] hover:underline dark:text-amber-300 shrink-0"
-                  >
-                    <Film className="w-2.5 h-2.5" />
-                    <span>+1</span>
-                  </button>
-                ) : (
-                  <span className="font-mono-num text-[9px] text-[#7A654F] dark:text-[#A4907B] shrink-0">
-                    {Math.min(100, rotateGaugePct)}%
-                  </span>
-                )}
-              </div>
-            </div>
 
-            {/* Tactical Undo */}
-            <div className="flex flex-col justify-between p-1.5 sm:p-2 rounded-xl border min-h-[68px] sm:min-h-[86px] bg-[#EFE4D2] border-[#D4C0A3] dark:bg-[#191410] dark:border-[#3A2B1F]">
-              <div className="w-full flex items-center justify-between text-[10px] font-semibold text-[#6E5A46] dark:text-[#B4A08A]">
-                <span>Undo</span>
-                <span
-                  data-testid="undo-charges"
-                  className="font-mono-num font-bold text-[#1E3A2F] dark:text-amber-300"
-                >
-                  {undoCharges}
-                </span>
-              </div>
-
-              <button
-                type="button"
-                data-testid="undo-button"
-                onClick={handleUndo}
-                disabled={undoCharges <= 0 || undoStack.length === 0}
-                aria-label={`Undo last placed piece. ${undoCharges} charges left`}
-                className={`w-full flex items-center justify-center gap-1 sm:gap-1.5 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition-colors ${
-                  undoCharges > 0 && undoStack.length > 0
-                    ? 'bg-[#1E3A2F] text-[#FDF8F2] hover:bg-[#274C3D] dark:bg-amber-600 dark:text-[#120D08] dark:hover:bg-amber-500'
-                    : 'bg-[#D8C5A8] text-[#7A654F] cursor-not-allowed dark:bg-[#261D16] dark:text-[#7A6754]'
-                }`}
-              >
-                <Undo2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                <span>Undo</span>
+                <div className="flex flex-1 items-center justify-center py-0.5 sm:py-1">
+                  {pocket && !(
+                    dragSession?.hasMoved &&
+                    dragSession.source.kind === 'pocket'
+                  ) ? (
+                    <PiecePreview
+                      piece={pocket}
+                      cellSize={13}
+                      gap={1.5}
+                      tileSkin={activeTileSkin}
+                    />
+                  ) : (
+                    <span className="text-[11px] font-medium text-[#8C7760] dark:text-[#786552]">
+                      {canSwapOrPark ? 'Tap / Drop' : 'Hold 1'}
+                    </span>
+                  )}
+                </div>
               </button>
 
-              {canRequestPuzzleReward(monetization.noAdsBundlePurchased) && undoCharges === 0 && undoStack.length > 0 ? (
+              {pocketCooldown > 0 ? (
                 <button
                   type="button"
-                  data-testid="recharge-undo-button"
-                  onClick={handleRechargeUndo}
-                  aria-label="Refill 1 Tactical Undo charge"
-                  className="w-full inline-flex items-center justify-center gap-1 py-0.5 rounded text-[10px] font-semibold text-[#0F766E] hover:underline dark:text-amber-300"
+                  data-testid="pocket-skip-ad"
+                  onClick={() => void handlePocketSkip()}
+                  aria-label="Watch an optional ad to make Pocket ready now"
+                  className="mt-0.5 flex h-5 items-center justify-center gap-1 rounded-md bg-[#1F3A34] text-[9px] font-bold text-[#F6EFE4] transition-colors hover:bg-[#274C3D] dark:bg-[#D2A16B] dark:text-[#17241E] dark:hover:bg-[#E1B882]"
                 >
-                  {monetization.noAdsBundlePurchased ? (
-                    <PlusCircle className="w-3 h-3" />
-                  ) : (
-                    <Film className="w-3 h-3" />
-                  )}
-                  <span>
-                    {monetization.noAdsBundlePurchased ? 'Refill +1' : 'Ad +1 Undo'}
-                  </span>
+                  <span aria-hidden="true">▶</span>
+                  <span>Skip Rest · {pocketCooldown}</span>
                 </button>
               ) : (
-                <div className="text-[9px] text-center font-medium text-[#7A654F] dark:text-[#A4907B] truncate">
-                  Rewind last move
+                <div className="mt-0.5 flex h-5 items-center justify-center text-[10px] font-medium whitespace-nowrap text-[#6E5A46] dark:text-[#B4A08A]">
+                  {pocket ? (canSwapOrPark ? 'Swap' : 'Ready') : 'Reserve'}
                 </div>
               )}
             </div>
+
+            {([
+              { key: 'ROTATE', label: 'Spin', count: rotateCharges, ad: 'Watch Ad (+2 Spins)', action: handleRotateSelected, Icon: RotateCw },
+              { key: 'UNDO', label: 'Undo', count: undoCharges, ad: 'Watch Ad (Undo)', action: handleUndo, Icon: Undo2 },
+            ] as const).map(({ key, label, count, ad, action, Icon }) => (
+              <div key={key} className="power-card">
+                <div className="flex items-center justify-between text-[10px] font-bold"><span>{label}</span><span data-testid={`${key === 'ROTATE' ? 'rotate' : 'undo'}-charges`}>{count}</span></div>
+                <button type="button" data-testid={`${key === 'ROTATE' ? 'rotate' : 'undo'}-button`} disabled={count ? (key === 'ROTATE' ? !selectedPiece : undoStack.length === 0) : false} onClick={count ? action : () => void handlePowerReward(key)}>
+                  {count ? <Icon className="size-3 shrink-0" /> : <span aria-hidden="true">▶</span>}{count ? label : ad}
+                </button>
+              </div>
+            ))}
           </div>
 
           {/* 3-Piece Solvable Artisan Tray */}
@@ -3635,20 +3673,6 @@ export default function App() {
             })}
           </div>
 
-          {/* Selected Special Ability Hint / Lines Counter */}
-          <div className="flex items-start justify-between gap-2 px-1 text-[10px] sm:text-[11px] leading-snug text-[#7A654F] dark:text-[#9D8A76]">
-            <span className="inline-flex items-start gap-1 min-w-0">
-              <Sparkles className="w-3 h-3 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
-              <span className="break-words">
-                {selectedPiece?.specialType
-                  ? `${SPECIAL_BLOCK_META[selectedPiece.specialType].label}: ${SPECIAL_BLOCK_META[selectedPiece.specialType].description}`
-                  : selectedPiece
-                    ? `Selected: ${selectedPiece.name} (${MATERIAL_META[selectedPiece.material].shortLabel})`
-                    : 'Drag or tap a block to place'}
-              </span>
-            </span>
-            <span className="font-mono-num shrink-0 ml-1">Lines {linesCleared}</span>
-          </div>
         </section>
       </main>
       )}
@@ -3743,13 +3767,16 @@ export default function App() {
       {phase === 'gameover' && !viewFinalBoard && (
         <GameOverModal
           onViewBoard={() => setViewFinalBoard(true)}
-          canRevive={canRequestPuzzleReward(monetization.noAdsBundlePurchased)}
+          canRevive={!reviveUsed}
           reviveStatus={reviveStatus}
           stats={runStats}
           canUndoRescue={undoCharges > 0 && undoStack.length > 0}
           noAdsOwned={monetization.noAdsBundlePurchased}
           isNewBest={score > 0 && score >= runStats.bestScore}
           lostStreakCount={preLossStreak}
+          canDoubleDailyBest={canDoubleDailyBest}
+          dailyBonusDoubled={dailyBonusDoubled}
+          onDoubleDailyBest={handleDoubleDailyBest}
           onReviveClear3x3={handleReviveClear3x3}
           onUndoRescue={handleUndo}
           onPlayAgain={() => startRun(mode, levelNumber, seedCode)}
@@ -3828,7 +3855,8 @@ export default function App() {
           onRestorePurchases={handleRestorePurchases}
           onRequestAdConsent={handleRequestAdConsent}
           onOpenPrivacyTerms={() => setShowPrivacyModal(true)}
-          onResetAllData={handleResetAllData}
+          onOpenHelp={() => { setShowSettingsModal(false); setShowHelpModal(true); }}
+            onResetAllData={handleResetAllData}
           onClose={() => setShowSettingsModal(false)}
         />
       )}

@@ -114,14 +114,14 @@ export interface PlacementOutcome {
   lanternDoubled: boolean;
   totalScoreGained: number;
   nextCombo: number;
-  earnedRotateCharges: number;
-  nextRotateGaugePct: number;
   mossCleared: number;
   acornGemsCollected: number;
   bonusFlowerStars: number;
 }
 
 export interface UndoSnapshot {
+  pocketCooldown?: number;
+  catNap?: CellCoord | null;
   rngState?: number;
   bestCombo?: number;
   grid: Grid8x8;
@@ -134,8 +134,6 @@ export interface UndoSnapshot {
   mossCleared: number;
   acornGemsCollected: number;
   bonusStarsEarned: number;
-  rotateCharges: number;
-  rotateGaugePct: number;
   selectedSource: PieceSource | null;
 }
 
@@ -270,6 +268,8 @@ export type AdRewardType =
   | 'ROTATE'
   | 'REVIVE_CLEAR_3X3'
   | 'DOUBLE_STARS'
+  | 'DOUBLE_DAILY_SCORE'
+  | 'POCKET_SKIP'
   | 'FREE_GEMS';
 
 export type AdConsentStatus = 'unknown' | 'obtained';
@@ -345,9 +345,12 @@ export interface PersistedState {
     acornGemsCollected: number;
     bonusStarsEarned: number;
     rotateCharges: number;
-    rotateGaugePct: number;
     undoCharges: number;
     undoStack: UndoSnapshot[];
+    pocketCooldown?: number;
+    catNap?: CellCoord | null;
+    reviveUsed?: boolean;
+    dailyBonusDoubled?: boolean;
     seedCode: string;
     rngState: number;
   } | null;

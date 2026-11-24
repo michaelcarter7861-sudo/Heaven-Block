@@ -129,10 +129,10 @@ export function buildProgressiveCascadeNotes(
   return specs;
 }
 
-const volumes = { wood: 0.35, clear: 0.35, combo: 0.3, error: 0.24, rain: 0.16 };
+const volumes = { wood: 0.35, clear: 0.35, combo: 0.3, error: 0.24, rain: 0.22, meow: 0.23, purr: 0.21 };
 type Clip = keyof typeof volumes;
 
-/** Five local recordings; no audio context or oscillator synthesis. */
+/** Local sampled effects and independent rain ambience; no runtime synthesis. */
 class CozyAudioEngine {
   private clips = new Map<Clip, HTMLAudioElement>();
   private muted = false;
@@ -151,21 +151,20 @@ class CozyAudioEngine {
   }
 
   private play(name: Clip) {
-    if (this.muted || this.suspended || typeof Audio === 'undefined') return;
+    if ((name !== 'rain' && this.muted) || this.suspended || typeof Audio === 'undefined') return;
     const clip = this.getClip(name);
     if (name !== 'rain') clip.currentTime = 0;
     if (name !== 'rain' || clip.paused) void clip.play().catch(() => {});
   }
 
   private syncAmbient() {
-    if (this.ambientEnabled && !this.muted && !this.suspended) this.play('rain');
+    if (this.ambientEnabled && !this.suspended) this.play('rain');
     else this.clips.get('rain')?.pause();
   }
 
   setMuted(value: boolean) {
     this.muted = value;
-    if (value) this.clips.forEach((clip) => clip.pause());
-    this.syncAmbient();
+    if (value) this.clips.forEach((clip, name) => { if (name !== 'rain') clip.pause(); });
   }
 
   setAmbientEnabled(value: boolean) {
@@ -187,6 +186,8 @@ class CozyAudioEngine {
   playPlace(_material: MaterialType) { this.play('wood'); }
   playClear(_lines: number, combo: number, _hasLantern = false) { this.play(combo > 1 ? 'combo' : 'clear'); }
   playCascade(_count = 1, _combo = 1, _hasLantern = false) { this.play('combo'); }
+  playCat() { this.play('meow'); }
+  playPurr() { this.play('purr'); }
   playError() { this.play('error'); }
   playDecorate() { this.play('wood'); }
   playRewardChime() { this.play('clear'); }

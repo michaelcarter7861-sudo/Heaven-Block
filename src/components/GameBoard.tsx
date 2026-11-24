@@ -14,6 +14,7 @@ import {
 import { ArtisanTile, BlockedTile, FlowerTile, MossTile } from './ArtisanTile';
 
 interface GameBoardProps {
+  decoration?: React.ReactNode;
   boardRef: React.RefObject<HTMLDivElement | null>;
   boardShape: BoardShapeId;
   grid: Grid8x8;
@@ -149,6 +150,7 @@ const PARTICLE_VECTORS = [
 ];
 
 export const GameBoard: React.FC<GameBoardProps> = ({
+  decoration,
   boardRef,
   boardShape,
   grid,
@@ -239,6 +241,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               );
             })
           )}
+
+          {decoration}
 
           {/* Material-Matched Particle Bursts */}
           {particleBursts.length > 0 && (

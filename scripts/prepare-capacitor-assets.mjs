@@ -6,59 +6,29 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const assets = path.join(root, 'assets');
 const publicDir = path.join(root, 'public');
-const iconPngSource = path.join(assets, 'icon-master.png');
-const splashPngSource = path.join(assets, 'splash-source.png');
-const iconSvgFallback = path.join(assets, 'icon-source.svg');
-const splashSvgFallback = path.join(assets, 'splash-source.svg');
-const iconPng = path.join(assets, 'icon-only.png');
-const splashPng = path.join(assets, 'splash.png');
-
-await fs.mkdir(assets, { recursive: true });
-await fs.mkdir(publicDir, { recursive: true });
-
-// Prefer the uploaded woodland icon and custom portrait-safe splash when those
-// PNG masters are present. Keep the original vector assets as a safe fallback
-// so Android builds never fail while the new binary masters are being added.
-const hasIconPng = await fs.access(iconPngSource).then(() => true).catch(() => false);
-const hasSplashPng = await fs.access(splashPngSource).then(() => true).catch(() => false);
-
-if (hasIconPng) {
-  const iconBase = await sharp(iconPngSource).resize(1024, 1024).png().toBuffer();
-  const roundedMask = Buffer.from(
-    '<svg width="1024" height="1024" xmlns="http://www.w3.org/2000/svg">' +
-    '<rect width="1024" height="1024" rx="194" fill="#fff"/></svg>'
-  );
-  await sharp(iconBase).composite([{ input: roundedMask, blend: 'dest-in' }])
-    .png({ compressionLevel: 9 }).toFile(iconPng);
-} else {
-  await fs.access(iconSvgFallback);
-  await sharp(iconSvgFallback).resize(1024, 1024)
-    .png({ compressionLevel: 9 }).toFile(iconPng);
-}
-
-if (hasSplashPng) {
-  await sharp(splashPngSource).resize(2732, 2732, { fit: 'cover', position: 'centre' })
-    .png({ compressionLevel: 9 }).toFile(splashPng);
-} else {
-  await fs.access(splashSvgFallback);
-  await sharp(splashSvgFallback).resize(2732, 2732)
-    .png({ compressionLevel: 9 }).toFile(splashPng);
-}
+const forest = '#1F3A34';
+const foreground = await fs.readFile(path.join(assets, 'icon-foreground.svg'), 'utf8');
+const art = foreground.slice(foreground.indexOf('<defs>'), foreground.lastIndexOf('</svg>'));
+const svg = (size, content) => `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${content}</svg>`;
+const backdrop = (size, radius = 0) => `<defs><radialGradient id="forest"><stop stop-color="#486354"/><stop offset="1" stop-color="${forest}"/></radialGradient></defs><rect width="${size}" height="${size}" rx="${radius}" fill="url(#forest)"/>`;
+const icon = svg(1024, backdrop(1024) + art);
+const splash = svg(2732, `<rect width="2732" height="2732" fill="${forest}"/><g transform="translate(990 939) scale(.735)">${art}</g><text x="1366" y="1614" text-anchor="middle" fill="#F6EFE4" font-family="Georgia, DejaVu Serif, serif" font-size="140" font-weight="bold">HavenBlocks</text><text x="1366" y="1718" text-anchor="middle" fill="#E1C8A4" font-family="DejaVu Sans, sans-serif" font-size="45" letter-spacing="8">HONEST COZY BLOCK PUZZLE</text>`);
+const png = (source, size, output) => sharp(Buffer.from(source)).resize(size).png({ compressionLevel: 9 }).toFile(output);
 
 await Promise.all([
-  sharp(iconPng).resize(192, 192).png({ compressionLevel: 9 }).toFile(path.join(publicDir, 'pwa-192x192.png')),
-  sharp(iconPng).resize(512, 512).png({ compressionLevel: 9 }).toFile(path.join(publicDir, 'pwa-512x512.png')),
-  sharp(iconPng).resize(180, 180).png({ compressionLevel: 9 }).toFile(path.join(publicDir, 'apple-touch-icon.png')),
+  fs.writeFile(path.join(assets, 'icon-source.svg'), icon),
+  fs.writeFile(path.join(assets, 'splash-source.svg'), splash),
+  fs.writeFile(path.join(assets, 'splash-background.svg'), svg(2732, `<rect width="2732" height="2732" fill="${forest}"/>`)),
+  fs.writeFile(path.join(publicDir, 'icon.svg'), icon),
+  png(svg(1024, backdrop(1024, 192) + art), 1024, path.join(assets, 'icon-only.png')),
+  // The source art is inset to ~55%; the fully opaque icon is safe under maskable crops.
+  png(svg(1024, `<g transform="translate(72 72) scale(.86)">${art}</g>`), 1024, path.join(assets, 'icon-foreground.png')),
+  png(svg(1024, backdrop(1024)), 1024, path.join(assets, 'icon-background.png')),
+  png(splash, 2732, path.join(assets, 'splash.png')),
+  png(splash, 2732, path.join(assets, 'splash-dark.png')),
+  png(icon, 192, path.join(publicDir, 'pwa-192x192.png')),
+  png(icon, 512, path.join(publicDir, 'pwa-512x512.png')),
+  png(icon, 512, path.join(publicDir, 'pwa-maskable-512x512.png')),
+  png(icon, 180, path.join(publicDir, 'apple-touch-icon.png')),
 ]);
-
-const maskForeground = await sharp(iconPng).resize(410, 410).png().toBuffer();
-await sharp({
-  create: { width: 512, height: 512, channels: 3, background: { r: 11, g: 36, b: 24 } },
-})
-  .composite([{ input: maskForeground, left: 51, top: 51 }])
-  .png({ compressionLevel: 9 })
-  .toFile(path.join(publicDir, 'pwa-maskable-512x512.png'));
-
-console.log(hasIconPng && hasSplashPng
-  ? 'Generated the supplied HavenBlocks woodland icon and splash assets.'
-  : 'Generated fallback branding; add assets/icon-master.png and assets/splash-source.png to activate the supplied artwork.');
+console.log('Generated HavenBlocks v2 adaptive, PWA, and splash artwork.');

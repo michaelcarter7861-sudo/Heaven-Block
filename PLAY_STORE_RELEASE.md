@@ -3,8 +3,10 @@
 This repository is configured as an offline-first PWA + Capacitor Android game ready to package into a signed Android App Bundle (`.aab`) for Google Play.
 
 - **Package ID (`applicationId`):** `com.havenblocks.cozyroom`
-- **Version:** `1.0.0` (`versionCode: 1`)
+- **Initial release version:** `1.0.0` (`versionCode` is assigned by the Android workflow)
 - **Privacy Policy URL (included):** `https://<your-hosted-domain>/privacy.html`
+
+> **v2 scope lock:** `ENABLE_FULL_META` remains `false`. The Cozy Haven shop, starter bundles, gems/currency packs, Herbarium and room-restoration progression are hidden in this release and must not be advertised, sold or shown until a later version explicitly re-enables them.
 
 ---
 
@@ -19,53 +21,56 @@ In `android/variables.gradle`, ensure:
 ---
 
 ## 2. Build Web Bundle & Initialize Capacitor Android
-Run in your local machine / CI environment with Android Studio & JDK 17+ installed:
+Run on a machine with Android Studio & JDK 17 installed:
 
 ```bash
 npm install
 npm run build
-
-# Install Capacitor core + Android platform + lifecycle plugins
-npm install @capacitor/core @capacitor/android @capacitor/app @capacitor/status-bar @capacitor/splash-screen
-npm install -D @capacitor/cli
-
-# Create Android project using capacitor.config.json
 npx cap add android
 npx cap sync android
 ```
 
-To rebuild and sync after any web change:
+Generate and patch the Android project before opening or building it:
+
 ```bash
-npm run cap:sync
+npm run prepare:assets
+node scripts/patch-android-branding.mjs
+npx cap sync android
 ```
 
+The patcher installs the generated adaptive launcher and `#1F3A34` splash theme. Generated Android launcher/splash PNGs are intentionally ignored by Git and must be regenerated in the release environment; the checked-in PWA icons in `public/` are committed.
+
 Open in Android Studio:
+
 ```bash
 npx cap open android
 ```
 
 ---
 
-## 3. Native Monetization & Review Plugins (Optional for Launch)
-`src/game/monetization.ts` and `src/game/nativeBridge.ts` automatically detect Capacitor plugins at runtime (`window.Capacitor.Plugins.*`) and fall back gracefully on web:
+## 3. v2 Rewarded Ads (Optional for Launch)
+HavenBlocks v2 has **no forced ads**. All reward grants are opt-in and go through `requestRewardedAd(placement, onReward)` in `src/game/puzzleRewards.ts`; a reward is granted only after the provider returns success.
 
-| Feature | Plugin / Bridge | Notes |
+| Placement | Player-facing button | Reward |
 | --- | --- | --- |
-| Rewarded Ads + UMP GDPR | `@capacitor-community/admob` | Set your real AdMob App ID in `AndroidManifest.xml` & Rewarded Ad Unit ID before release. |
-| Google Play Billing (v8+) | Custom / RevenueCat / `capacitor-purchases` exposed as `Capacitor.Plugins.Billing` | Implement `purchaseProduct({ productId })` and `restorePurchases()` matching the SKU table below. |
-| Play In-App Review | `@capacitor-community/in-app-review` (`Capacitor.Plugins.InAppReview.requestReview`) | Triggered once at 4th Cozy Room upgrade (never on a loss). |
+| `ROTATE` | **Watch Ad (+2 Spins)** | Restores Spins to the two-spin cap |
+| `UNDO` | **Watch Ad (Undo)** | Restores one Undo |
+| `REVIVE_CLEAR_3X3` | **Watch Ad: Clear 3×3 & Continue** | Clears the board centre once per run |
+| `DOUBLE_DAILY_SCORE` | **Watch Ad: 2× Daily Best** | Doubles the recorded Daily best-score result |
+| `POCKET_SKIP` | **Skip Rest** | Makes a resting Pocket ready immediately |
 
-### Exact Play Console In-App Product SKUs (`src/game/shop.ts`)
-Create these exact Product IDs in **Google Play Console → Monetize → Products → In-app products**:
+The native Android implementation uses `@capacitor-community/admob` with UMP consent handling; web/CrazyGames-style portal builds may set `window.showRewardedAd(placement) => Promise<boolean>` and use the same app code path. If no provider is configured, both paths fail closed and show “Reward unavailable” without granting charges. VIP/no-ads entitlement may bypass the ad and grant only the explicitly selected reward.
 
-| Product ID | Type | Price | Contents |
-| --- | --- | --- | --- |
-| `bundle_cozy_starter_v1` | One-time (Non-consumable) | $3.99 | No Ads VIP + 300 Gems + Lop Bunny Pet |
-| `bundle_master_artisan_v1` | One-time (Non-consumable) | $7.99 | 800 Gems + Rainy Conservatory Window Theme + 5 Undos |
-| `gems_pouch_80` | Consumable | $0.99 | 80 Cozy Gems |
-| `gems_basket_450` | Consumable | $4.99 | 450 Cozy Gems (Best Value) |
-| `gems_chest_1000` | Consumable | $9.99 | 1,000 Cozy Gems |
-| `gems_vault_2400` | Consumable | $19.99 | 2,400 Cozy Gems |
+### Required production setup
+1. Create an AdMob app and a **rewarded video** ad unit for this package ID.
+2. Store the real **App ID** as the GitHub Actions secret `ADMOB_APP_ID` and the real rewarded unit ID as `ADMOB_REWARDED_AD_ID`. The workflow maps the latter to `VITE_ADMOB_REWARDED_ID` only for the web bundle.
+3. Release builds fail closed in `scripts/verify-release-ads.mjs` when either secret is missing, malformed, or uses Google’s sample/test publisher ID. The manifest patcher injects `ADMOB_APP_ID` into `android/app/src/main/AndroidManifest.xml` after `npx cap add android`.
+4. Keep UMP consent working before ad requests; do not initialize or request ads when Google reports that ads cannot be requested.
+5. Test the native build with an eligible test device. Verify each placement separately: reward granted, ad closed early, no-fill/error and the disabled state before a second grant.
+6. Do not show "Watch Ad" copy until inventory is ready, and do not claim the ads are available on the public web build unless a real portal provider is configured.
+
+### Hidden legacy products — do not configure for v2
+No IAP products are shown or required while `ENABLE_FULL_META = false`. In particular, do **not** create the legacy starter bundle, gem pouches/baskets/chests/vaults, bundle SKU tables or Herbarium products in Play Console for this release. The old systems remain in code for future work but their UI paths and rewards are hidden.
 
 ---
 
@@ -74,16 +79,18 @@ Create these exact Product IDs in **Google Play Console → Monetize → Product
 2. **Data Safety Form:**
    - **Account creation:** No (offline-first, no login).
    - **On-device save deletion:** Supported directly inside **Settings → Delete Local Save Data**.
-   - **If AdMob is enabled:** Declare Device/Other IDs & Approximate Location (AdMob SDK) as collected by third-party advertising SDK, encrypted in transit, and governed by UMP consent.
+   - **If AdMob is enabled:** Declare Device/Other IDs & Approximate Location (AdMob SDK) as collected by the third-party advertising SDK, encrypted in transit and governed by UMP consent.
    - **If launched ad-free (no AdMob SDK):** Declare **No user data collected or shared**.
-3. **Android App Links / TWA (Optional):** Replace the SHA-256 fingerprint inside `public/.well-known/assetlinks.json` with your **Play App Signing** certificate SHA-256 from Play Console → Setup → App Signing.
+3. **Android App Links / TWA (Optional):** Replace the SHA-256 fingerprint inside `public/.well-known/assetlinks.json` with the Play App Signing certificate SHA-256 from Play Console → Setup → App Signing.
 4. **Minimal Permissions Audit:** Verify `android/app/src/main/AndroidManifest.xml` only includes `INTERNET` (and `VIBRATE` for haptics) — no camera, contacts, or precise location permissions.
 
 ---
 
 ## 5. Generate Signed Android App Bundle (`.aab`)
 In Android Studio:
+
 1. **Build → Generate Signed App Bundle / APK → Android App Bundle**.
-2. Create or select your **Upload Keystore** (store securely outside git).
-3. Select **release** build variant → build `app-release.aab`.
-4. Upload to **Google Play Console → Testing → Internal testing** first, test hardware Back button, Edge-to-Edge status bar, offline Airplane Mode launch, Daily Puzzle shortcut, and Play Billing test cards, then promote to **Production**.
+2. Create or select your Upload Keystore (store it outside Git).
+3. Select the **release** build variant and build `app-release.aab`.
+4. Upload to **Play Console → Testing → Internal testing** first. Test on physical Android hardware: hardware Back button, Edge-to-Edge system bars, offline airplane-mode launch, Daily shortcut, splash effect with no white flash, ten rapid drags with rain and automatic Cat Nap behavior, audio/haptics/reduced-motion toggles, and all five rewarded-ad placements.
+5. Promote only after the Play Console pre-launch report is clean.

@@ -394,6 +394,9 @@ interface GameOverModalProps {
   noAdsOwned: boolean;
   isNewBest: boolean;
   lostStreakCount?: number;
+  canDoubleDailyBest: boolean;
+  dailyBonusDoubled: boolean;
+  onDoubleDailyBest: () => void;
   onReviveClear3x3: () => void;
   onUndoRescue: () => void;
   onPlayAgain: () => void;
@@ -409,6 +412,9 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   noAdsOwned,
   isNewBest,
   lostStreakCount = 0,
+  canDoubleDailyBest,
+  dailyBonusDoubled,
+  onDoubleDailyBest,
   onReviveClear3x3,
   onUndoRescue,
   onPlayAgain,
@@ -581,7 +587,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                     : 'Clear 3×3 & Revive (VIP)'
                   : lostStreakCount > 0
                     ? `Watch Ad: Clear 3×3 & Save Streak`
-                    : 'Watch Ad: Clear 3×3 & Revive'}
+                    : 'Watch Ad: Clear 3×3 & Continue'}
               </span>
             </button>
           )}
@@ -594,6 +600,21 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
               <Undo2 className="w-4 h-4" />
               <span>Use Tactical Undo</span>
             </button>
+          )}
+          {isDailyPuzzleSeed(stats.seedCode) && stats.mode === 'duel' && stats.score >= 1500 && !dailyBonusDoubled && (
+            <button
+              type="button"
+              data-testid="ad-daily-double"
+              onClick={onDoubleDailyBest}
+              disabled={!canDoubleDailyBest}
+              className="w-full inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2.5 rounded-xl font-semibold text-sm border border-amber-500/70 bg-amber-100 text-amber-950 hover:bg-amber-200 dark:bg-amber-500/20 dark:border-amber-400/60 dark:text-amber-200 dark:hover:bg-amber-500/30 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {noAdsOwned ? <Sparkles className="w-4 h-4" /> : <Film className="w-4 h-4" />}
+              <span>{noAdsOwned ? 'Claim 2× Daily Best' : 'Watch Ad: 2× Daily Best'}</span>
+            </button>
+          )}
+          {isDailyPuzzleSeed(stats.seedCode) && stats.mode === 'duel' && dailyBonusDoubled && (
+            <p data-testid="daily-bonus-doubled" role="status" className="text-center text-xs font-semibold text-emerald-700 dark:text-emerald-300">2× Daily Best recorded ✓</p>
           )}
           {stats.mode === 'duel' && (
             <div className="flex items-center gap-2">
@@ -719,7 +740,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ onClose }) => {
                 Rotate (Key: R) &amp; Undo (Key: Z)
               </div>
               <p>
-                Earn Rotate charges by clearing lines and chaining combos. Spend a charge to spin a piece 90° clockwise. One Undo charge lets you rewind a placement.
+                Start with one Spin and one Undo. Pocket swaps rest for two placements. Optional rewarded ads can refill your tools when a provider is available.
               </p>
             </div>
           </div>

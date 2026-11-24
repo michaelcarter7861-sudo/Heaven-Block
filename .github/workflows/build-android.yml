@@ -52,6 +52,12 @@ jobs:
       - name: 🎨 Prepare Game Icon, Splash and PWA Assets
         run: npm run prepare:assets
 
+      - name: 🧪 Validate Release AdMob Secrets
+        run: node scripts/verify-release-ads.mjs "${{ github.event.inputs.build_type || 'release' }}"
+        env:
+          ADMOB_APP_ID: ${{ secrets.ADMOB_APP_ID }}
+          ADMOB_REWARDED_AD_ID: ${{ secrets.ADMOB_REWARDED_AD_ID }}
+
       - name: 🏗️ Build Web Bundle
         run: npm run build
         env:
@@ -64,7 +70,7 @@ jobs:
 
       - name: 📱 Generate Native Android Icon and Splash Resources
         run: npx capacitor-assets generate --android
-      - name: 🌿 Apply HeavenBlocks Adaptive Launcher Icon
+      - name: 🌿 Apply HavenBlocks Launcher and Splash Theme
         run: node scripts/patch-android-branding.mjs
 
       - name: ⚙️ Set Android SDK Versions

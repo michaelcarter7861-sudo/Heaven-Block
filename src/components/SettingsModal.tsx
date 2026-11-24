@@ -32,6 +32,7 @@ interface SettingsModalProps {
   onRequestAdConsent: () => Promise<string>;
   onOpenPrivacyTerms: () => void;
   onResetAllData: () => void;
+  onOpenHelp: () => void;
   onClose: () => void;
 }
 
@@ -103,6 +104,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onRequestAdConsent,
   onOpenPrivacyTerms,
   onResetAllData,
+  onOpenHelp,
   onClose,
 }) => {
   const [backupCode, setBackupCode] = useState<string>('');
@@ -222,11 +224,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
         </div>
 
+        <button type="button" className="mb-2 rounded-lg border border-current/20 px-3 py-2 text-sm font-semibold" onClick={onOpenHelp}>How to play</button>
         {/* 1. Audio, Ambient Soundscape, Accessibility & Haptics */}
         <div className="space-y-2 mb-5">
           <SwitchRow
             testId="setting-toggle-sound"
-            label="Sound Effects"
+            label="Game SFX"
             description="Wooden thocks, marimba chimes & room sparkles"
             checked={settings.soundEnabled}
             icon={<Volume2 className="w-4 h-4" />}
@@ -236,7 +239,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           />
           <SwitchRow
             testId="setting-toggle-ambient"
-            label="Ambient Rain & Hearth"
+            label="Rain Ambience"
             description="Gentle procedural rainfall & warm fireside hum"
             checked={Boolean(settings.ambientSoundEnabled)}
             icon={<CloudRain className="w-4 h-4" />}

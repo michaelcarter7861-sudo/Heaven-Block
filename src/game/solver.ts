@@ -142,7 +142,6 @@ export function applyPlacement(
   anchorRow: number,
   anchorCol: number,
   currentCombo: number,
-  currentRotateGaugePct: number,
   rng?: SeededRng
 ): PlacementOutcome {
   const preview = previewPlacement(grid, piece.cells, anchorRow, anchorCol);
@@ -391,9 +390,6 @@ export function applyPlacement(
   let nextCombo = currentCombo;
   let clearScore = 0;
   let cascadeBonusScore = 0;
-  let earnedRotateCharges = 0;
-  let nextRotateGaugePct = currentRotateGaugePct;
-
   const totalClearedLines = L + cascadeLinesCleared;
 
   if (L > 0) {
@@ -413,18 +409,6 @@ export function applyPlacement(
       flowerBonus +
       cascadeBonusScore;
 
-    if (totalClearedLines >= 2 || nextCombo >= 2) {
-      earnedRotateCharges = 1;
-      nextRotateGaugePct = currentRotateGaugePct;
-    } else {
-      const updated = currentRotateGaugePct + 25;
-      if (updated >= 100) {
-        earnedRotateCharges = 1;
-        nextRotateGaugePct = updated - 100;
-      } else {
-        nextRotateGaugePct = updated;
-      }
-    }
   } else {
     nextCombo = 0;
   }
@@ -445,8 +429,6 @@ export function applyPlacement(
     lanternDoubled,
     totalScoreGained: placeScore + clearScore,
     nextCombo,
-    earnedRotateCharges,
-    nextRotateGaugePct,
     mossCleared,
     acornGemsCollected,
     bonusFlowerStars,
@@ -723,7 +705,8 @@ export function checkHasAnyPlayableMove(
   grid: Grid8x8,
   tray: (PieceInstance | null)[],
   pocketPiece: PieceInstance | null,
-  rotateCharges: number
+  rotateCharges: number,
+  canParkLastPiece = true
 ): boolean {
   const activeTray = tray.filter((p): p is PieceInstance => p !== null);
 
@@ -737,7 +720,7 @@ export function checkHasAnyPlayableMove(
     return true;
   }
 
-  if (pocketPiece === null && activeTray.length === 1) {
+  if (canParkLastPiece && pocketPiece === null && activeTray.length === 1) {
     for (let r = 0; r < GRID_SIZE; r++) {
       for (let c = 0; c < GRID_SIZE; c++) {
         if (grid[r][c] === null) return true;

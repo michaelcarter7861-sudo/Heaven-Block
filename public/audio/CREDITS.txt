@@ -8,13 +8,17 @@ encoded the five clips as mono Ogg Vorbis. These licenses apply to the
 individual sound assets, not to the HavenBlocks application.
 
 wood.ogg — data/core/sounds/club.ogg; Leonardo Magno Sampaio (leorock116)
-combo.ogg — data/core/sounds/magic-holy-1.ogg; Richard Kettering (Jetrel)
 error.ogg — data/core/sounds/wose-hit.ogg; Lari Nieminen (zookeeper)
 rain.ogg — data/internal/Weather/sounds/weather-rain.ogg; inferno8 and dalas
-The four clips above are distributed under GPL version 2 or later (GPL-2.0.txt).
+The three clips above are distributed under GPL version 2 or later (GPL-2.0.txt).
 
 clear.ogg — data/campaigns/The_Deceivers_Gambit/sounds/bell.ogg;
 gregswinford (https://freesound.org/people/gregswinford/sounds/70102/),
 Wesnoth adaptation credited to the campaign sound contributors.
 The edited version is distributed under CC BY-SA 4.0:
 https://creativecommons.org/licenses/by-sa/4.0/
+
+V2: rain.ogg was further filtered at 1,450 Hz for warm rain-on-glass.
+V2 replaced the upstream combo sound with an original rendered wooden-mallet
+arpeggio. The new combo.ogg, meow.ogg and purr.ogg are project-authored stylized
+foley, rendered with scripts/prepare-polish-sfx.py and played as local samples.

@@ -57,7 +57,7 @@ test('rotatePieceCW turns 1x3 horizontal into 3x1 vertical and increments rotati
   ]);
 });
 
-test('previewPlacement detects multi-line clear (row + column) and applyPlacement scores + awards Rotate charge', () => {
+test('previewPlacement detects multi-line clear (row + column) and applyPlacement scores without awarding Spin charges', () => {
   const grid = createEmptyGrid();
   for (let c = 0; c < 8; c++) {
     if (c !== 5) grid[2][c] = { kind: 'tile', material: 'honey_oak', uid: `r_${c}` };
@@ -74,11 +74,11 @@ test('previewPlacement detects multi-line clear (row + column) and applyPlacemen
   assert.deepEqual(preview.clearedCols, [5]);
   assert.equal(preview.totalClearedLines, 2);
 
-  const outcome = applyPlacement(grid, dot, 2, 5, 0, 0);
+  const outcome = applyPlacement(grid, dot, 2, 5, 0);
   assert.equal(outcome.placeScore, 10);
   assert.equal(outcome.clearScore, 360);
   assert.equal(outcome.totalScoreGained, 370);
-  assert.equal(outcome.earnedRotateCharges, 1);
+  assert.equal('earnedRotateCharges' in outcome, false);
   assert.equal(outcome.nextCombo, 1);
   assert.equal(outcome.nextGrid[2][5], null);
 });
@@ -178,7 +178,7 @@ test('Architectural layouts preserve blocked cells and clear active lines around
       grid[3][c] = { kind: 'tile', material: 'sea_glass', uid: `f3_${c}` };
     }
   }
-  const outcome = applyPlacement(grid, dot, 3, 0, 0, 0, rng);
+  const outcome = applyPlacement(grid, dot, 3, 0, 0, rng);
   assert.deepEqual(outcome.clearedRows, [3]);
   // Fountain blocked cells remain intact, active tiles & moss cleared!
   assert.equal(outcome.nextGrid[3][3]?.kind, 'blocked');
@@ -206,7 +206,7 @@ test('Amber Honey Block clears 4 orthogonal neighbors including Moss without har
     { specialCellIndex: 0, specialType: 'amber_honey' }
   );
 
-  const outcome = applyPlacement(grid, honeyDot, 2, 3, 0, 0);
+  const outcome = applyPlacement(grid, honeyDot, 2, 3, 0);
   assert.equal(outcome.totalClearedLines, 1);
   assert.equal(outcome.nextGrid[1][3], null); // Moss splashed away!
   assert.equal(outcome.mossCleared, 1);
@@ -227,7 +227,7 @@ test('Bloom-Seed sprouts a Flower tile that awards +1 bonus Cozy Star when clear
     { specialCellIndex: 0, specialType: 'bloom_seed' }
   );
 
-  const out1 = applyPlacement(grid, bloomPiece, 0, 0, 0, 0, rng);
+  const out1 = applyPlacement(grid, bloomPiece, 0, 0, 0, rng);
   assert.equal(out1.sproutedCells.length, 1);
   const flowerPos = out1.sproutedCells[0];
   assert.equal(out1.nextGrid[flowerPos.r][flowerPos.c]?.kind, 'flower');
@@ -253,7 +253,7 @@ test('Bloom-Seed sprouts a Flower tile that awards +1 bonus Cozy Star when clear
     'lantern_1',
     { specialCellIndex: 0, specialType: 'lantern_glow' }
   );
-  const out2 = applyPlacement(grid2, lanternDot, flowerPos.r, missingCol, 0, 0, rng);
+  const out2 = applyPlacement(grid2, lanternDot, flowerPos.r, missingCol, 0, rng);
   assert.equal(out2.bonusFlowerStars, 1);
   assert.equal(out2.lanternDoubled, true);
   // Base 120 * 2 (lantern) + 50 (flower) + 10 (place) = 300
@@ -307,7 +307,7 @@ test('Level 1 4-second first-move hook triggers instant 2-line combo clear', () 
   assert.deepEqual(preview.clearedCols, [4]);
   assert.equal(preview.totalClearedLines, 2);
 
-  const outcome = applyPlacement(grid, bar, 3, 3, 0, 0, rng);
+  const outcome = applyPlacement(grid, bar, 3, 3, 0, rng);
   assert.equal(outcome.totalClearedLines, 2);
   assert.ok(outcome.totalScoreGained >= 300);
 });
@@ -332,7 +332,7 @@ test('Amber Honey Cascade Chain completes and clears an additional near-full lin
     specialType: 'amber_honey',
   });
 
-  const outcome = applyPlacement(grid, honeyDot, 2, 3, 0, 0);
+  const outcome = applyPlacement(grid, honeyDot, 2, 3, 0);
   assert.equal(outcome.cascadeCount >= 1, true);
   assert.equal(outcome.cascadeLinesCleared >= 1, true);
   assert.ok(outcome.cascadeBonusScore > 0);
