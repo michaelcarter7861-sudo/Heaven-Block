@@ -17,6 +17,11 @@ if (appId.includes(googleSamplePublisher) || rewardedAdId.includes(googleSampleP
   errors.push('Google test/sample AdMob IDs are not allowed in a release build.');
 }
 
+const publisherId = (id) => id.match(/^ca-app-pub-(\d{16})/)?.[1] ?? null;
+if (publisherId(appId) && publisherId(rewardedAdId) && publisherId(appId) !== publisherId(rewardedAdId)) {
+  errors.push('ADMOB_APP_ID and ADMOB_REWARDED_AD_ID belong to different AdMob publishers. The app ID and rewarded unit must come from the same AdMob account.');
+}
+
 if (errors.length > 0) {
   console.error('Release Android build requires real AdMob secrets:');
   for (const error of errors) console.error(`- ${error}`);

@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import {
   formatDailyShareCard,
+  getSharePlayUrl,
   isDailyPuzzleSeed,
   isNativePlatform,
 } from '../game/monetization';
@@ -424,10 +425,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   const [copied, setCopied] = useState(false);
   const [copyFallbackText, setCopyFallbackText] = useState<string | null>(null);
 
-  const shareUrl =
-    typeof window !== 'undefined'
-      ? `${window.location.origin}${window.location.pathname}?duel=${encodeURIComponent(stats.seedCode)}`
-      : `?duel=${encodeURIComponent(stats.seedCode)}`;
+  const shareUrl = getSharePlayUrl(stats.seedCode);
 
   const spoilerFreeCard = formatDailyShareCard({
     seedCode: stats.seedCode,
@@ -443,7 +441,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   const handleCopyChallenge = async () => {
     if (!navigator.clipboard?.writeText) {
       setCopied(false);
-      setCopyFallbackText(shareUrl);
+      setCopyFallbackText(shareUrl ?? spoilerFreeCard);
       return;
     }
     try {
@@ -453,7 +451,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
       window.setTimeout(() => setCopied(false), 1800);
     } catch {
       setCopied(false);
-      setCopyFallbackText(shareUrl);
+      setCopyFallbackText(shareUrl ?? spoilerFreeCard);
     }
   };
 
@@ -463,13 +461,14 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
       return;
     }
     try {
-      await navigator.share({
+      const shareData: ShareData = {
         title: isDailyPuzzleSeed(stats.seedCode)
           ? 'HavenBlocks Daily Result'
           : 'HavenBlocks Same-Board Challenge',
         text: spoilerFreeCard,
-        url: shareUrl,
-      });
+      };
+      if (shareUrl) shareData.url = shareUrl;
+      await navigator.share(shareData);
     } catch {
       await handleCopyChallenge();
     }
@@ -480,10 +479,10 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-label="Out of Moves"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
+      className="overlay-safe-area fixed inset-0 z-50 flex items-center justify-center bg-black/60"
     >
-      <div className="w-full max-w-sm max-h-full overflow-y-auto rounded-2xl p-6 border shadow-2xl bg-[#FAF5EC] border-[#D4C0A3] text-[#2A1F15] dark:bg-[#191410] dark:border-[#3D2E22] dark:text-[#F5EDE1]">
-        <div className="mb-4">
+      <div className="gameover-panel overflow-wrap-anywhere w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain rounded-2xl p-4 min-[380px]:p-6 border shadow-2xl bg-[#FAF5EC] border-[#D4C0A3] text-[#2A1F15] dark:bg-[#191410] dark:border-[#3D2E22] dark:text-[#F5EDE1]">
+        <div className="gameover-header mb-4">
           <div className="text-xs font-semibold tracking-wide text-amber-700 dark:text-amber-400 mb-1">
             {isDailyPuzzleSeed(stats.seedCode)
               ? `Daily Haven Puzzle · ${stats.seedCode.replace(/^DAILY-/, '')}`
@@ -493,7 +492,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                   ? 'New Best Score'
                   : 'Board Full'}
           </div>
-          <h2 className="font-display text-2xl font-bold">No Valid Moves Left</h2>
+          <h2 className="gameover-title font-display text-2xl font-bold">No Valid Moves Left</h2>
           {ENABLE_FULL_META && (stats.gemsAwarded ?? 0) > 0 && (
             <div
               data-testid="daily-gems-awarded"
@@ -509,8 +508,8 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
           )}
         </div>
 
-        <div className="grid grid-cols-3 gap-2 mb-4">
-          <div className="p-3 rounded-xl bg-[#EFE4D2] dark:bg-[#241C16]">
+        <div className="gameover-stats grid grid-cols-3 gap-2 mb-4">
+          <div className="gameover-stat p-3 rounded-xl bg-[#EFE4D2] dark:bg-[#241C16]">
             <div className="text-[11px] font-medium text-[#6E5A46] dark:text-[#B4A08A]">
               Score
             </div>
@@ -518,7 +517,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
               {stats.score.toLocaleString()}
             </div>
           </div>
-          <div className="p-3 rounded-xl bg-[#EFE4D2] dark:bg-[#241C16]">
+          <div className="gameover-stat p-3 rounded-xl bg-[#EFE4D2] dark:bg-[#241C16]">
             <div className="text-[11px] font-medium text-[#6E5A46] dark:text-[#B4A08A]">
               Best
             </div>
@@ -526,7 +525,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
               {stats.bestScore.toLocaleString()}
             </div>
           </div>
-          <div className="p-3 rounded-xl bg-[#EFE4D2] dark:bg-[#241C16]">
+          <div className="gameover-stat p-3 rounded-xl bg-[#EFE4D2] dark:bg-[#241C16]">
             <div className="text-[11px] font-medium text-[#6E5A46] dark:text-[#B4A08A]">
               Lines
             </div>
@@ -540,12 +539,12 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         {stats.mode === 'duel' && (
           <div
             data-testid="daily-result-card"
-            className="rounded-xl p-3 mb-4 border text-left bg-[#EFE4D2] border-[#C9B292] dark:bg-[#14100C] dark:border-[#3A2B1F]"
+            className="gameover-card rounded-xl p-3 mb-4 border text-left bg-[#EFE4D2] border-[#C9B292] dark:bg-[#14100C] dark:border-[#3A2B1F]"
           >
             <div className="text-[10px] font-bold uppercase tracking-wider text-[#6E5A46] dark:text-amber-300/80 mb-1">
               Spoiler-Free Result Card
             </div>
-            <pre className="font-mono-num text-xs whitespace-pre-wrap break-all text-[#2A1F15] dark:text-[#F5EDE1]">
+            <pre className="font-mono-num text-[11px] min-[380px]:text-xs whitespace-pre-wrap break-all [overflow-wrap:anywhere] text-[#2A1F15] dark:text-[#F5EDE1]">
               {spoilerFreeCard}
             </pre>
             {copyFallbackText && (
@@ -565,15 +564,15 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
           </div>
         )}
 
-        <div className="flex flex-col gap-2.5">
-          <button type="button" onClick={onViewBoard} className="rounded-xl border border-current/30 min-h-[44px] font-semibold">View Board</button>
-          {reviveStatus && <p role="status" className="text-xs">{reviveStatus}</p>}
+        <div className="gameover-actions flex flex-col gap-2.5">
+          <button type="button" onClick={onViewBoard} className="gameover-action rounded-xl border border-current/30 min-h-[44px] font-semibold">View Board</button>
+          {reviveStatus && <p role="status" className="text-xs overflow-wrap-anywhere">{reviveStatus}</p>}
           {canRevive && (
             <button
               type="button"
               data-testid="ad-revive-3x3"
               onClick={onReviveClear3x3}
-              className="w-full inline-flex items-center justify-center gap-2 min-h-[48px] px-5 py-2.5 rounded-xl font-semibold text-sm border border-amber-500/70 bg-amber-100 text-amber-950 hover:bg-amber-200 dark:bg-amber-500/20 dark:border-amber-400/60 dark:text-amber-200 dark:hover:bg-amber-500/30"
+              className="gameover-action w-full inline-flex items-center justify-center gap-2 min-h-[48px] px-5 py-2.5 rounded-xl font-semibold text-sm border border-amber-500/70 bg-amber-100 text-amber-950 hover:bg-amber-200 dark:bg-amber-500/20 dark:border-amber-400/60 dark:text-amber-200 dark:hover:bg-amber-500/30"
             >
               {noAdsOwned ? (
                 <Sparkles className="w-4 h-4" />
@@ -595,7 +594,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             <button
               type="button"
               onClick={onUndoRescue}
-              className="w-full inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2.5 rounded-xl font-semibold text-sm border bg-[#EFE4D2] border-[#D4C0A3] hover:bg-[#E5D4BA] dark:bg-[#241C16] dark:border-[#3D2E22] dark:hover:bg-[#2E241C]"
+              className="gameover-action w-full inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2.5 rounded-xl font-semibold text-sm border bg-[#EFE4D2] border-[#D4C0A3] hover:bg-[#E5D4BA] dark:bg-[#241C16] dark:border-[#3D2E22] dark:hover:bg-[#2E241C]"
             >
               <Undo2 className="w-4 h-4" />
               <span>Use Tactical Undo</span>
@@ -607,7 +606,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
               data-testid="ad-daily-double"
               onClick={onDoubleDailyBest}
               disabled={!canDoubleDailyBest}
-              className="w-full inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2.5 rounded-xl font-semibold text-sm border border-amber-500/70 bg-amber-100 text-amber-950 hover:bg-amber-200 dark:bg-amber-500/20 dark:border-amber-400/60 dark:text-amber-200 dark:hover:bg-amber-500/30 disabled:cursor-not-allowed disabled:opacity-50"
+              className="gameover-action w-full inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2.5 rounded-xl font-semibold text-sm border border-amber-500/70 bg-amber-100 text-amber-950 hover:bg-amber-200 dark:bg-amber-500/20 dark:border-amber-400/60 dark:text-amber-200 dark:hover:bg-amber-500/30 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {noAdsOwned ? <Sparkles className="w-4 h-4" /> : <Film className="w-4 h-4" />}
               <span>{noAdsOwned ? 'Claim 2× Daily Best' : 'Watch Ad: 2× Daily Best'}</span>
@@ -622,7 +621,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                 type="button"
                 data-testid="gameover-copy-challenge-btn"
                 onClick={handleCopyChallenge}
-                className="flex-1 inline-flex items-center justify-center gap-2 min-h-[44px] px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm border bg-[#EFE4D2] border-[#D4C0A3] hover:bg-[#E5D4BA] dark:bg-[#241C16] dark:border-[#3D2E22] dark:hover:bg-[#2E241C]"
+                className="gameover-action flex-1 inline-flex items-center justify-center gap-2 min-h-[44px] px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm border bg-[#EFE4D2] border-[#D4C0A3] hover:bg-[#E5D4BA] dark:bg-[#241C16] dark:border-[#3D2E22] dark:hover:bg-[#2E241C]"
               >
                 {copied ? (
                   <>
@@ -632,7 +631,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                 ) : (
                   <>
                     <Copy className="w-4 h-4" />
-                    <span>Play this same board · Copy Link</span>
+                    <span>{shareUrl ? 'Play this same board · Copy Link' : 'Copy Spoiler-Free Result'}</span>
                   </>
                 )}
               </button>
@@ -652,7 +651,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             type="button"
             data-start="true"
             onClick={onPlayAgain}
-            className="w-full inline-flex items-center justify-center gap-2 min-h-[48px] px-5 py-2.5 rounded-xl font-semibold text-sm text-[#FDF8F2] bg-[#1E3A2F] hover:bg-[#274C3D] dark:bg-amber-600 dark:hover:bg-amber-500 dark:text-[#120D08]"
+            className="gameover-action w-full inline-flex items-center justify-center gap-2 min-h-[48px] px-5 py-2.5 rounded-xl font-semibold text-sm text-[#FDF8F2] bg-[#1E3A2F] hover:bg-[#274C3D] dark:bg-amber-600 dark:hover:bg-amber-500 dark:text-[#120D08]"
           >
             <RotateCcw className="w-4 h-4" />
             <span>Play Again</span>
@@ -660,7 +659,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
           <button
             type="button"
             onClick={onBackToTitle}
-            className="w-full inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2.5 rounded-xl font-semibold text-sm text-[#6E5A46] hover:text-[#2A1F15] dark:text-[#B4A08A] dark:hover:text-[#F5EDE1]"
+            className="gameover-action w-full inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2.5 rounded-xl font-semibold text-sm text-[#6E5A46] hover:text-[#2A1F15] dark:text-[#B4A08A] dark:hover:text-[#F5EDE1]"
           >
             <Home className="w-4 h-4" />
             <span>Title Screen</span>

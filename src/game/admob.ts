@@ -55,7 +55,9 @@ function getUserFacingAdError(error: unknown, stage: 'load' | 'show'): string {
   const raw = detail.toLowerCase();
   let summary: string;
 
-  if (/no.?fill|no ads available|inventory/.test(raw)) {
+  if (/publisher data not found|admob\/answer\/9905175#3|code\s*3\b/.test(raw)) {
+    summary = 'Google could not find this ad placement yet. Please try again later.';
+  } else if (/no.?fill|no ads available|inventory/.test(raw)) {
     summary = 'No rewarded ad is available right now. Please try again later.';
   } else if (/network|internet|connection|timeout|unreachable/.test(raw)) {
     summary = 'The ad could not connect. Check your internet connection and try again.';
@@ -67,9 +69,10 @@ function getUserFacingAdError(error: unknown, stage: 'load' | 'show'): string {
       : 'The rewarded ad could not be opened. No reward was given.';
   }
 
-  // Keep the native SDK's error text visible so production failures can be
-  // diagnosed on-device without requiring Logcat access.
-  return detail ? `${summary} (Google SDK: ${detail.slice(0, 240)})` : summary;
+  // Keep diagnostics in the console/Logcat, but never expose the raw SDK
+  // payload to players. It can contain long links and is not actionable in UI.
+  if (detail) console.warn('[AdMob] Raw error detail:', detail);
+  return summary;
 }
 
 export function isAdMobAvailable(): boolean {

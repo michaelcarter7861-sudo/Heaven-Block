@@ -28,6 +28,8 @@ Before public promotion:
 2. **Choose one provider after acceptance.** For an approved web portal build, have its SDK adapter set `window.showRewardedAd` before React mounts. The hook takes `'ROTATE'`, `'UNDO'`, `'REVIVE_CLEAR_3X3'`, `'DOUBLE_DAILY_SCORE'`, or `'POCKET_SKIP'` and resolves `true` **only** on the provider's earned-reward callback. Resolve `false` on cancel or no fill; do not trigger interstitial, banner or gameplay-start ads. The standalone build has no web ad SDK and offers no fake rewards. Update the privacy notice for the actual provider before shipping.
 3. **Android separately.** This repo includes the native AdMob/UMP path. Before release, use test ads, verify consent, and store owner-provided `ADMOB_APP_ID` and `ADMOB_REWARDED_AD_ID` in GitHub Actions secrets; the release workflow rejects missing, malformed or Google test IDs. Confirm the chosen store's current AdMob readiness eligibility and any local publisher requirements. A raw APK or web link does not establish AdMob eligibility. Do not assume portal acceptance, ad fill, revenue or a payout date. Consider Google Play once there is demand and a budget for the account fee.
 
+Native share links: Capacitor serves Android from `https://localhost`, so the app only emits an absolute “Play this same board” URL when the build provides `VITE_SHARE_BASE_URL` (the Android workflow maps the repository variable `SHARE_BASE_URL`). Otherwise it shares the spoiler-free result text and seed.
+
 Audio source and licenses: [`public/audio/CREDITS.txt`](public/audio/CREDITS.txt). Keep the notices with uploads.
 
 ## Included v2 optional extras

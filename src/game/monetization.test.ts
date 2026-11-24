@@ -11,6 +11,7 @@ import {
   DAILY_STREAK_REWARDS,
   formatDailyShareCard,
   getDailyPuzzleSeed,
+  getSharePlayUrl,
   isDailyPuzzleSeed,
   RATE_US_FURNITURE_THRESHOLD,
   recordDailyPuzzleRun,
@@ -93,6 +94,21 @@ test('Daily login reward uses non-punitive pause-and-resume progression when day
   });
   assert.ok(card.includes('HavenBlocks Daily 2026-11-18'));
   assert.ok(card.includes('Play this same board:'));
+});
+
+test('share URLs never leak a native Capacitor localhost origin', () => {
+  // Node has no window and no configured VITE_SHARE_BASE_URL. The helper must
+  // fail closed instead of emitting https://localhost links from a device.
+  assert.equal(getSharePlayUrl('DAILY-2026-11-18'), undefined);
+  const card = formatDailyShareCard({
+    seedCode: 'DAILY-2026-11-18',
+    score: 9660,
+    linesCleared: 35,
+    bestCombo: 7,
+  });
+  assert.ok(card.includes('HavenBlocks Daily 2026-11-18'));
+  assert.ok(!card.includes('localhost'));
+  assert.ok(!card.includes('Play this same board:'));
 });
 
 test('Gameplay Gem progression awards Cozy Gems on Story wins and first Daily Puzzle completion', () => {

@@ -19,6 +19,16 @@
     overscroll-behavior: none;
     touch-action: manipulation;
   }
+
+  /* Unbreakable SDK/URLs must never widen a phone viewport. */
+  pre,
+  code,
+  input,
+  textarea {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
 }
 
 .font-display {
@@ -36,6 +46,75 @@
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--shell-pb, 0px));
     padding-left: calc(env(safe-area-inset-left, 0px) + var(--shell-px, 0px));
     padding-right: calc(env(safe-area-inset-right, 0px) + var(--shell-px, 0px));
+  }
+
+  .overlay-safe-area {
+    padding-top: max(1rem, env(safe-area-inset-top, 0px));
+    padding-right: max(1rem, env(safe-area-inset-right, 0px));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+    padding-left: max(1rem, env(safe-area-inset-left, 0px));
+  }
+
+  .overflow-wrap-anywhere {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  /* Short landscape / small phones: keep the whole result screen legible without scrolling. */
+  @media (max-height: 620px) {
+    .gameover-panel {
+      padding: 0.65rem !important;
+      border-radius: 1.1rem !important;
+    }
+    .gameover-header {
+      margin-bottom: 0.4rem !important;
+    }
+    .gameover-title {
+      font-size: 1.3rem !important;
+      line-height: 1.1 !important;
+      margin-bottom: 0.15rem !important;
+    }
+    .gameover-stats {
+      gap: 0.35rem !important;
+      margin-bottom: 0.4rem !important;
+    }
+    .gameover-stat {
+      padding: 0.4rem 0.35rem !important;
+      border-radius: 0.65rem !important;
+    }
+    .gameover-card {
+      padding: 0.45rem 0.55rem !important;
+      margin-bottom: 0.4rem !important;
+    }
+    .gameover-card pre {
+      font-size: 9px !important;
+      line-height: 1.12 !important;
+    }
+    .gameover-actions {
+      gap: 0.35rem !important;
+    }
+    .gameover-action {
+      min-height: 34px !important;
+      padding-top: 0.25rem !important;
+      padding-bottom: 0.25rem !important;
+      font-size: 0.78rem !important;
+      line-height: 1.15 !important;
+    }
+  }
+
+  /* The play surface must fit the device; scrolling the page behind the tray is a bug. */
+  .play-shell {
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
+  }
+
+  @media (max-height: 500px) {
+    .play-shell {
+      height: auto;
+      min-height: 100dvh;
+      overflow: visible;
+    }
   }
 }
 
@@ -494,5 +573,16 @@ html.colorblind-mode .colorblind-material-symbol {
 .cat-nap-marker { position:absolute; inset:2px; z-index:2; display:grid; place-items:center; pointer-events:none; border-radius:8px; border:1px dashed #c1844b; background:#e8b77940; }
 .cat-nap-marker svg { width:90%; height:90%; }
 .reduced-motion-pref .cat-breath,.reduced-motion-pref .cat-tail,.reduced-motion-pref .conservatory-rain i { animation:none; }
+/* Keep gameplay pointer frames focused on the board; pause decorative loops mid-drag. */
+.is-dragging .conservatory-rain i,
+.is-dragging .cat-breath,
+.is-dragging .cat-tail,
+.is-dragging .sill-flame,
+.is-dragging .animate-pulse,
+.is-dragging .animate-clear-preview-shimmer,
+.is-dragging .animate-board-shake,
+.is-dragging .animate-board-shake-alt {
+  animation-play-state: paused !important;
+}
 [data-conservatory="candlelight"] [data-testid="game-board"] { background:#23352c; border-color:#46574a; }
 [data-conservatory="candlelight"] [data-cell-kind="empty"] { background-color:#35453b; border-color:#49594e; }

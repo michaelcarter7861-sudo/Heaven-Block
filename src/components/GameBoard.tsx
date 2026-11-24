@@ -1,5 +1,5 @@
 import { ENABLE_FULL_META } from '../game/features';
-import React from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { LEVEL1_HOOK_TARGET_CELLS } from '../game/levels';
 import {
   GRID_SIZE,
@@ -165,6 +165,16 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   firstMoveHookActive = false,
   onCellClick,
 }) => {
+  // Keep the callback identity stable so board cells do not all re-render when
+  // App state changes after a placement.
+  const onCellClickRef = useRef(onCellClick);
+  useEffect(() => {
+    onCellClickRef.current = onCellClick;
+  }, [onCellClick]);
+  const stableOnCellClick = useCallback((row: number, col: number) => {
+    onCellClickRef.current(row, col);
+  }, []);
+
   const previewCellInfo = new Map<
     string,
     { special?: PieceInstance['specialType']; hasAcornGem?: boolean }
@@ -194,7 +204,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   return (
     <div className="relative flex items-center justify-center w-full">
       <div
-        className={`w-full max-w-[clamp(180px,calc(100dvh-365px),430px)] max-h-[clamp(180px,calc(100dvh-365px),430px)] aspect-square p-1.5 sm:p-3.5 rounded-2xl border transition-colors duration-200
+        className={`w-full max-w-[clamp(160px,calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-365px),430px)] max-h-[clamp(160px,calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-365px),430px)] aspect-square p-1.5 sm:p-3.5 rounded-2xl border transition-colors duration-200
           bg-[#DEC9A8] border-[#C4A882] shadow-[0_10px_28px_-8px_rgba(45,28,12,0.28),inset_0_2px_2px_rgba(255,250,240,0.65)]
           dark:bg-[#19130E] dark:border-[#3A2B1F] dark:shadow-[0_12px_32px_-8px_rgba(0,0,0,0.85),inset_0_1px_1px_rgba(245,190,110,0.12)] ${
             shakeKey > 0 ? (shakeKey % 2 ? 'animate-board-shake' : 'animate-board-shake-alt') : ''
@@ -236,7 +246,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                   canTapToPlace={canTapToPlace}
                   previewMaterial={isPreviewTarget ? previewMaterial : null}
                   tileSkin={tileSkin}
-                  onCellClick={onCellClick}
+                  onCellClick={stableOnCellClick}
                 />
               );
             })
