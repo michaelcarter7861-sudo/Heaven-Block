@@ -352,7 +352,7 @@ export const PrivacyTermsModal: React.FC<PrivacyTermsModalProps> = ({
             </h3>
             <p>
               HavenBlocks never forces disruptive interstitial ads. Watching a
-              rewarded ad for an Undo refill or 3×3 Revive is strictly opt-in.
+              rewarded ad for a Spin or Undo refill, or a 3×3 Revive, is strictly opt-in.
               On Android builds using AdMob, regional privacy consent is
               managed via Google User Messaging Platform (UMP).
             </p>

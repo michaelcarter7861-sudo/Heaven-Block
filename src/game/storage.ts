@@ -319,6 +319,7 @@ export function normalizePersistedState(
           undoStack: Array.isArray(parsed.activeRun.undoStack)
             ? parsed.activeRun.undoStack.slice(-MAX_PERSISTED_UNDO_STEPS)
             : [],
+          dailyBonusDoubled: parsed.activeRun.dailyBonusDoubled === true,
         }
       : null,
   };

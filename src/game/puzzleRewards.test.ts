@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canRequestPuzzleReward, requestPuzzleReward } from './puzzleRewards';
+import { canRequestPuzzleReward, requestPuzzleReward, requestRewardedAd } from './puzzleRewards';
 
 test('puzzle rewards are opt-in, fail closed and serialize provider requests', async () => {
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
@@ -22,6 +22,11 @@ test('puzzle rewards are opt-in, fail closed and serialize provider requests', a
     complete(true);
     assert.equal((await first).rewarded, true);
     assert.deepEqual(calls, ['UNDO']);
+    let grants = 0;
+    fakeWindow.showRewardedAd = async (placement) => placement === 'ROTATE';
+    await requestRewardedAd('ROTATE', () => grants++);
+    await requestRewardedAd('UNDO', () => grants++);
+    assert.equal(grants, 1);
     fakeWindow.showRewardedAd = async () => false;
     assert.equal((await requestPuzzleReward('REVIVE_CLEAR_3X3')).rewarded, false);
     fakeWindow.showRewardedAd = async () => { throw new Error('unavailable'); };

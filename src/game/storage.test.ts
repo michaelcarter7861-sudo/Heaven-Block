@@ -93,7 +93,6 @@ test('normalizePersistedState caps activeRun.undoStack to last 5 moves', () => {
     acornGemsCollected: 0,
     bonusStarsEarned: 0,
     rotateCharges: 1,
-    rotateGaugePct: 0,
     selectedSource: null,
   }));
 
@@ -116,8 +115,7 @@ test('normalizePersistedState caps activeRun.undoStack to last 5 moves', () => {
       acornGemsCollected: 0,
       bonusStarsEarned: 0,
       rotateCharges: 1,
-      rotateGaugePct: 0,
-      undoCharges: 2,
+        undoCharges: 2,
       undoStack: snapshots,
     },
   });

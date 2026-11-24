@@ -68,10 +68,11 @@ export const PWAInstallButton: React.FC = () => {
       type="button"
       data-testid="pwa-install-btn"
       onClick={installPWA}
-      className="inline-flex items-center gap-1.5 min-h-[34px] px-2.5 py-1 rounded-xl text-xs font-semibold border transition-colors bg-[#FAF5EC] border-[#C9B292] text-[#1E3A2F] hover:bg-[#E7D8C0] dark:bg-[#221A14] dark:border-[#3D2E22] dark:text-amber-300"
+      aria-label="Install HavenBlocks app"
+      title="Install app"
+      className="grid size-10 place-items-center rounded-xl border transition-colors bg-[#FAF5EC] border-[#C9B292] text-[#1E3A2F] hover:bg-[#E7D8C0] dark:bg-[#221A14] dark:border-[#3D2E22] dark:text-amber-300"
     >
-      <Download className="w-3.5 h-3.5" />
-      <span>Install App</span>
+      <Download className="w-4 h-4" />
     </button>
   );
 };

@@ -3,9 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#0B2418" />
-    <meta name="theme-color" content="#0B2418" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#080705" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#1F3A34" />
+    <meta name="theme-color" content="#1F3A34" media="(prefers-color-scheme: light)" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -16,11 +15,17 @@
     <meta property="og:description" content="An honest 8×8 block puzzle with Endless Zen, Daily Honest Seed, and zero forced ads." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
-    <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="./pwa-192x192.png" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
   </head>
-  <body>
-    <div id="root"></div>
+  <body style="margin:0;background:#1F3A34">
+    <div id="root">
+      <div style="min-height:100dvh;display:grid;place-content:center;text-align:center;background:#1F3A34;color:#F6EFE4" aria-label="HavenBlocks is loading">
+        <img src="./icon.svg" alt="" width="140" height="140" style="margin:auto" />
+        <strong style="font:700 2.6rem Georgia,serif">HavenBlocks</strong>
+        <span style="font:0.8rem system-ui,sans-serif;margin-top:0.5rem">Honest Cozy Block Puzzle</span>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

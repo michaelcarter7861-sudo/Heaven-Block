@@ -5,7 +5,7 @@ import sharp from 'sharp';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const androidRes = path.join(root, 'android', 'app', 'src', 'main', 'res');
-const iconPng = path.join(root, 'assets', 'icon-only.png');
+const iconPng = path.join(root, 'assets', 'icon-foreground.png');
 const manifest = path.join(root, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
 
 await fs.access(manifest);
@@ -29,7 +29,7 @@ const adaptive = '<?xml version="1.0" encoding="utf-8"?>\n' +
   '</adaptive-icon>\n';
 const outputs = [
   [path.join(androidRes, 'values', 'ic_launcher_background.xml'),
-   '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n  <color name="ic_launcher_background">#0B2418</color>\n</resources>\n'],
+   '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n  <color name="ic_launcher_background">#1F3A34</color>\n</resources>\n'],
   [path.join(androidRes, 'mipmap-anydpi-v26', 'ic_launcher.xml'), adaptive],
   [path.join(androidRes, 'mipmap-anydpi-v26', 'ic_launcher_round.xml'), adaptive],
 ];
@@ -37,4 +37,14 @@ for (const [file, content] of outputs) {
   await fs.mkdir(path.dirname(file), { recursive: true });
   await fs.writeFile(file, content, 'utf8');
 }
-console.log('Applied the supplied HavenBlocks launcher artwork to legacy and adaptive Android icons.');
+const stylesPath = path.join(androidRes, 'values', 'styles.xml');
+const styles = await fs.readFile(stylesPath, 'utf8');
+if (!styles.includes('name="windowSplashScreenBackground"')) {
+  const launch = '<style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">';
+  if (!styles.includes(launch)) throw new Error('Missing Capacitor splash theme');
+  await fs.writeFile(stylesPath, styles.replace(launch, launch + `
+        <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>`));
+}
+console.log('Applied HavenBlocks v2 adaptive launcher and Android splash theme.');

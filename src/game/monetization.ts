@@ -43,6 +43,16 @@ export const AD_REWARD_META: Record<
     subtitle: 'Earn 2× stars for your Cozy Haven',
     rewardBadge: '2× Cozy Stars',
   },
+  DOUBLE_DAILY_SCORE: {
+    title: 'Daily Bonus',
+    subtitle: 'Double the recorded Daily best-score result',
+    rewardBadge: '2× Daily Best',
+  },
+  POCKET_SKIP: {
+    title: 'Pocket Ready',
+    subtitle: 'Skip the Pocket’s two-move cooldown',
+    rewardBadge: 'Pocket Ready',
+  },
   FREE_GEMS: {
     title: 'Free Cozy Gems',
     subtitle: 'Bonus gems for your boutique collection',

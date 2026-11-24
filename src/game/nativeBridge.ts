@@ -3,7 +3,7 @@ import type { AppView, GamePhase } from './types';
 export const APP_VERSION = '1.0.0';
 export const APP_PACKAGE_ID = 'com.havenblocks.cozyroom';
 
-export const DAY_THEME_COLOR = '#F6EFE4';
+export const DAY_THEME_COLOR = '#1F3A34';
 export const NIGHT_THEME_COLOR = '#080705';
 
 export type BackNavigationAction =
@@ -72,7 +72,7 @@ export async function hideNativeSplashScreen(win?: unknown): Promise<boolean> {
   const splash = getCapacitor(win)?.Plugins?.SplashScreen;
   if (!splash?.hide) return false;
   try {
-    await splash.hide({ fadeOutDuration: 220 });
+    await splash.hide({ fadeOutDuration: 300 });
     return true;
   } catch {
     return false;
