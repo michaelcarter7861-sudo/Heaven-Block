@@ -496,6 +496,7 @@ export default function App() {
   const [reviveStatus, setReviveStatus] = useState<string | null>(null);
   const dragHoverRef = useRef<{ row?: number; col?: number; overPocket: boolean }>({ overPocket: false });
   const [dragSession, setDragSession] = useState<Pick<DragSession, 'source' | 'piece' | 'hasMoved'> | null>(null);
+  const [boardCellPx, setBoardCellPx] = useState(40);
   const [dragPreviewAnchor, setDragPreviewAnchor] = useState<{ r: number; c: number } | null>(null);
   const [isOverPocket, setIsOverPocket] = useState<boolean>(false);
   const [clearingKeys, setClearingKeys] = useState<Set<string>>(new Set());
@@ -2466,6 +2467,23 @@ export default function App() {
     moveTrayPieceToPocket,
   ]);
 
+  // Never read layout directly during render. Keep the drag-ghost cell size in
+  // state and update it only when the board actually resizes.
+  useEffect(() => {
+    const node = boardRef.current;
+    if (!node) return;
+    const updateBoardCellPx = () => {
+      const next = Math.floor((node.clientWidth - 24) / GRID_SIZE);
+      if (next > 0) {
+        setBoardCellPx((previous) => (previous === next ? previous : next));
+      }
+    };
+    updateBoardCellPx();
+    const observer = new ResizeObserver(updateBoardCellPx);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [appView, phase]);
+
   const activePreview: PlacementPreview | null = useMemo(() => {
     if (phase !== 'playing') return null;
     if (dragSession?.hasMoved) {
@@ -2581,11 +2599,11 @@ export default function App() {
     return (
       <>
         {!ENABLE_FULL_META ? (
-          <main data-conservatory={conservatoryTheme(0, nightCandleMode)} className="min-h-dvh grid place-items-center bg-[#f4e7d1] p-4 text-[#1f3a34]">
-            <section className="w-full max-w-md space-y-4 rounded-[28px] border border-[#c7b292] bg-[#fcf5e7] p-5 shadow-xl dark:border-[#43574d] dark:bg-[#20362e] dark:text-[#f6efe4]">
+          <main data-conservatory={conservatoryTheme(0, nightCandleMode)} className="min-h-dvh grid grid-cols-[minmax(0,1fr)] place-items-center bg-[#f4e7d1] p-4 text-[#1f3a34]">
+            <section className="w-full min-w-0 max-w-md space-y-4 rounded-[28px] border border-[#c7b292] bg-[#fcf5e7] p-4 min-[380px]:p-5 shadow-xl dark:border-[#43574d] dark:bg-[#20362e] dark:text-[#f6efe4]">
               <header className="space-y-2 text-center">
-                <p className="text-[10px] font-bold uppercase tracking-[.28em]">The Cozy Sanctuary</p>
-                <h1 className="font-display text-5xl font-bold">HavenBlocks</h1>
+                <p className="text-[10px] font-bold uppercase tracking-[.22em] min-[380px]:tracking-[.28em] break-words">The Cozy Sanctuary</p>
+                <h1 className="font-display text-4xl min-[380px]:text-5xl font-bold leading-none break-words">HavenBlocks</h1>
                 <p className="text-xs">Honest 8×8 puzzles · Zero forced ads</p>
                 <ConservatorySill hero />
                 <p className="text-[10px] font-semibold uppercase tracking-widest">{nightCandleMode ? 'Night Candlelight' : 'Morning Cottage'}</p>
@@ -2719,11 +2737,6 @@ export default function App() {
   const canSwapOrPark =
     selectedSource?.kind === 'tray' && Boolean(tray[selectedSource.index]);
 
-  const boardCellPx =
-    boardRef.current && boardRef.current.clientWidth > 0
-      ? Math.floor((boardRef.current.clientWidth - 24) / GRID_SIZE)
-      : 40;
-
   // Contextual Just-In-Time (JIT) Tooltip selection (never shown upfront on move 0, never re-shown once dismissed)
   const activeJitTip: {
     id: JitTipId;
@@ -2834,7 +2847,7 @@ export default function App() {
     <div
       data-conservatory={conservatory}
       data-puzzle-ambience={puzzleAmbience}
-      className={`safe-area-shell min-h-dvh w-full overflow-x-hidden flex flex-col justify-between select-none text-[#2A1F15] dark:text-[#F5EDE1] transition-colors duration-300 ${ambienceBgClass}`}
+      className={`safe-area-shell ${appView === 'puzzle' ? 'play-shell' : 'min-h-dvh'} ${dragSession?.hasMoved ? 'is-dragging' : ''} w-full overflow-x-hidden flex flex-col justify-between select-none text-[#2A1F15] dark:text-[#F5EDE1] transition-colors duration-300 ${ambienceBgClass}`}
     >
       {conservatory === 'rain' && <ConservatoryRain />}
       {!ENABLE_FULL_META ? (

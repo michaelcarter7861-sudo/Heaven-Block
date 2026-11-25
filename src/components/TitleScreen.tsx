@@ -27,7 +27,7 @@ import {
   getLevelDefinition,
   getLevelDifficultyMeta,
 } from '../game/levels';
-import { getTodayDateKey, isNativePlatform } from '../game/monetization';
+import { getSharePlayUrl, getTodayDateKey, isNativePlatform } from '../game/monetization';
 import {
   generateSeedCode,
   hashSeedCode,
@@ -132,11 +132,13 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
 
   const handleCopyDuel = async () => {
     const clean = normalizeSeedCode(seedCode);
-    const shareUrl = `${window.location.origin}${window.location.pathname}?duel=${encodeURIComponent(clean)}`;
-    const shareText = `Play this same board in HavenBlocks (Same starting board & seed: ${clean}): ${shareUrl}`;
+    const shareUrl = getSharePlayUrl(clean);
+    const shareText = shareUrl
+      ? `Play this same board in HavenBlocks (Same starting board & seed: ${clean}): ${shareUrl}`
+      : `HavenBlocks same starting board & seed: ${clean}`;
     if (!navigator.clipboard?.writeText) {
       setCopied(false);
-      setCopyFallbackText(shareUrl);
+      setCopyFallbackText(shareUrl ?? shareText);
       return;
     }
     try {
@@ -146,7 +148,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
       window.setTimeout(() => setCopied(false), 1800);
     } catch {
       setCopied(false);
-      setCopyFallbackText(shareUrl);
+      setCopyFallbackText(shareUrl ?? shareText);
     }
   };
 

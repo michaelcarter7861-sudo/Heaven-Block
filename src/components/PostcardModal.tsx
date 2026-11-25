@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, Copy, Download, ExternalLink, Share2, X } from 'lucide-react';
 import { renderHavenPostcardToCanvas } from '../game/postcard';
+import { getSharePlayUrl } from '../game/monetization';
 import { normalizeSeedCode } from '../game/shapes';
 import type { HavenProgress, HerbariumProgress } from '../game/types';
 
@@ -33,11 +34,8 @@ export const PostcardModal: React.FC<PostcardModalProps> = ({
   const [shareNote, setShareNote] = useState<string | null>(null);
 
   const cleanSeed = normalizeSeedCode(seedCode);
-  const canonicalDuelUrl =
-    typeof window !== 'undefined'
-      ? `${window.location.origin}${window.location.pathname}?duel=${encodeURIComponent(cleanSeed)}`
-      : `?duel=${encodeURIComponent(cleanSeed)}`;
-  const shareCaption = `My HavenBlocks Cozy Room — Best Score: ${bestScore.toLocaleString()} · ${herbarium.unlockedCardIds.length}/24 Herbarium Cards! Play this same board: ${canonicalDuelUrl}`;
+  const canonicalDuelUrl = getSharePlayUrl(cleanSeed);
+  const shareCaption = `My HavenBlocks Cozy Room — Best Score: ${bestScore.toLocaleString()} · ${herbarium.unlockedCardIds.length}/24 Herbarium Cards!${canonicalDuelUrl ? ` Play this same board: ${canonicalDuelUrl}` : ` Seed: ${cleanSeed}`}`;
   const canUseNativeShare =
     typeof navigator !== 'undefined' && typeof navigator.share === 'function';
 
@@ -73,7 +71,7 @@ export const PostcardModal: React.FC<PostcardModalProps> = ({
   const handleCopyPlayLink = async () => {
     if (!navigator.clipboard?.writeText) {
       setCopiedLink(false);
-      setCopyFallbackText(canonicalDuelUrl);
+      setCopyFallbackText(shareCaption);
       return;
     }
     try {
@@ -83,7 +81,7 @@ export const PostcardModal: React.FC<PostcardModalProps> = ({
       window.setTimeout(() => setCopiedLink(false), 2000);
     } catch {
       setCopiedLink(false);
-      setCopyFallbackText(canonicalDuelUrl);
+      setCopyFallbackText(shareCaption);
     }
   };
 
@@ -104,9 +102,9 @@ export const PostcardModal: React.FC<PostcardModalProps> = ({
         const shareData: ShareData = {
           title: 'My Cozy Haven Postcard',
           text: shareCaption,
-          url: canonicalDuelUrl,
           files: [file],
         };
+        if (canonicalDuelUrl) shareData.url = canonicalDuelUrl;
         if (!navigator.canShare || navigator.canShare(shareData)) {
           await navigator.share(shareData);
           setShareNote('Shared!');
@@ -114,11 +112,12 @@ export const PostcardModal: React.FC<PostcardModalProps> = ({
           return;
         }
       }
-      await navigator.share({
+      const shareData: ShareData = {
         title: 'My Cozy Haven Postcard',
         text: shareCaption,
-        url: canonicalDuelUrl,
-      });
+      };
+      if (canonicalDuelUrl) shareData.url = canonicalDuelUrl;
+      await navigator.share(shareData);
       setShareNote('Shared!');
       window.setTimeout(() => setShareNote(null), 1800);
     } catch {
@@ -175,14 +174,20 @@ export const PostcardModal: React.FC<PostcardModalProps> = ({
               Seed: {cleanSeed}
             </span>
           </div>
-          <a
-            href={canonicalDuelUrl}
-            data-testid="postcard-canonical-url"
-            className="inline-flex items-center gap-1.5 text-xs font-mono-num font-semibold underline break-all text-[#1E3A2F] hover:text-[#274C3D] dark:text-amber-300 dark:hover:text-amber-200"
-          >
-            <span>{canonicalDuelUrl}</span>
-            <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-          </a>
+          {canonicalDuelUrl ? (
+            <a
+              href={canonicalDuelUrl}
+              data-testid="postcard-canonical-url"
+              className="inline-flex items-center gap-1.5 text-xs font-mono-num font-semibold underline break-all text-[#1E3A2F] hover:text-[#274C3D] dark:text-amber-300 dark:hover:text-amber-200"
+            >
+              <span>{canonicalDuelUrl}</span>
+              <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+            </a>
+          ) : (
+            <span data-testid="postcard-share-seed" className="inline-flex items-center gap-1.5 text-xs font-mono-num font-semibold break-all">
+              Seed: {cleanSeed}
+            </span>
+          )}
 
           {copyFallbackText && (
             <div className="mt-2">

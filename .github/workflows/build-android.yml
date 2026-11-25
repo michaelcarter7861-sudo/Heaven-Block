@@ -62,6 +62,9 @@ jobs:
         run: npm run build
         env:
           VITE_ADMOB_REWARDED_ID: ${{ github.event.inputs.build_type == 'debug' && 'ca-app-pub-3940256099942544/5224354917' || secrets.ADMOB_REWARDED_AD_ID }}
+          # Optional public site used for “Play this same board” links in native builds.
+          # Set a repository variable (not secret) named SHARE_BASE_URL, for example https://example.com.
+          VITE_SHARE_BASE_URL: ${{ vars.SHARE_BASE_URL || '' }}
 
       - name: 📂 Initialize Capacitor Android
         run: npx cap add android

@@ -68,6 +68,7 @@ The native Android implementation uses `@capacitor-community/admob` with UMP con
 4. Keep UMP consent working before ad requests; do not initialize or request ads when Google reports that ads cannot be requested.
 5. Test the native build with an eligible test device. Verify each placement separately: reward granted, ad closed early, no-fill/error and the disabled state before a second grant.
 6. Do not show "Watch Ad" copy until inventory is ready, and do not claim the ads are available on the public web build unless a real portal provider is configured.
+7. “Play this same board” links in native builds need a public HTTPS base URL. Set the GitHub repository variable `SHARE_BASE_URL` (for example `https://your-domain.example`); the release workflow maps it to `VITE_SHARE_BASE_URL`. If it is unset, native builds share the spoiler-free result text and seed instead of emitting useless `https://localhost` links.
 
 ### Hidden legacy products — do not configure for v2
 No IAP products are shown or required while `ENABLE_FULL_META = false`. In particular, do **not** create the legacy starter bundle, gem pouches/baskets/chests/vaults, bundle SKU tables or Herbarium products in Play Console for this release. The old systems remain in code for future work but their UI paths and rewards are hidden.

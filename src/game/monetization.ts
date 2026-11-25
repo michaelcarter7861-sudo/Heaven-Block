@@ -356,6 +356,40 @@ export function recordDailyPuzzleRun(params: {
   };
 }
 
+const viteShareEnv = (
+  import.meta as unknown as { env?: { VITE_SHARE_BASE_URL?: string } }
+).env;
+
+/**
+ * Canonical URL for “Play this same board”.
+ *
+ * Capacitor serves native builds from https://localhost, so blindly using
+ * window.location produces links that only open on the device that built the
+ * share text. The Android app therefore omits the link unless the release
+ * explicitly configures VITE_SHARE_BASE_URL. Web deployments keep using their
+ * own public origin.
+ */
+export function getSharePlayUrl(seedCode: string): string | undefined {
+  const cleanSeed = seedCode.trim().toUpperCase();
+  if (!cleanSeed) return undefined;
+  const encoded = encodeURIComponent(cleanSeed);
+  const query = `?duel=${encoded}`;
+
+  const configuredBase = viteShareEnv?.VITE_SHARE_BASE_URL?.trim();
+  if (configuredBase && /^https:\/\//i.test(configuredBase)) {
+    return `${configuredBase.replace(/\/+$/, '')}${query}`;
+  }
+
+  if (typeof window === 'undefined' || isNativePlatform()) return undefined;
+  const { protocol, host, pathname } = window.location;
+  if (protocol !== 'https:' && protocol !== 'http:') return undefined;
+  if (/^(localhost|127\.0\.0\.1|\[::1\])(:|$)/i.test(host)) {
+    // Local development links are useful to the developer but not to players.
+    return undefined;
+  }
+  return `${protocol}//${host}${pathname}${query}`;
+}
+
 /**
  * Builds a spoiler-free shareable result card for Daily Haven Puzzle or Seed Duel runs.
  */
