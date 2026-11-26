@@ -1,5 +1,6 @@
 import type {
   CellCoord,
+  GameMode,
   MaterialType,
   PieceInstance,
   PolyominoShape,
@@ -39,11 +40,216 @@ export const MATERIAL_META: Record<
   },
 };
 
+export type LevelTierNumber = 1 | 2 | 3 | 4 | 5;
+
+export interface MaterialColorPair {
+  colorHex: string;
+  accentHex: string;
+}
+
+export interface LevelTierConfig {
+  tier: LevelTierNumber;
+  id: 'L1' | 'L2' | 'L3' | 'L4' | 'L5';
+  label: string;
+  name: string;
+  minScore: number;
+  maxScore: number;
+  nonClassicWeight: number;
+  accentHex: string;
+  shapeId: string;
+  unlockedShapeIds: string[];
+  colors: Record<MaterialType, string>;
+  palette: Record<MaterialType, MaterialColorPair>;
+}
+
+export const LEVEL_TIERS: readonly LevelTierConfig[] = [
+  {
+    tier: 1,
+    id: 'L1',
+    label: 'LVL 1',
+    name: 'Amber Cobalt',
+    minScore: 0,
+    maxScore: 999,
+    nonClassicWeight: 0.2,
+    accentHex: '#38BDF8',
+    shapeId: 'c_arch',
+    unlockedShapeIds: ['c_arch'],
+    colors: {
+      honey_oak: '#F5B731',
+      glazed_ceramic: '#22D3EE',
+      sea_glass: '#34D399',
+      woven_rattan: '#F59E0B',
+    },
+    palette: {
+      honey_oak: { colorHex: '#F5B731', accentHex: '#FDE68A' },
+      glazed_ceramic: { colorHex: '#22D3EE', accentHex: '#A5F3FC' },
+      sea_glass: { colorHex: '#34D399', accentHex: '#A7F3D0' },
+      woven_rattan: { colorHex: '#F59E0B', accentHex: '#38BDF8' },
+    },
+  },
+  {
+    tier: 2,
+    id: 'L2',
+    label: 'LVL 2',
+    name: 'Coral Teal',
+    minScore: 1000,
+    maxScore: 2499,
+    nonClassicWeight: 0.3,
+    accentHex: '#67E8F9',
+    shapeId: 'plus_cross',
+    unlockedShapeIds: ['c_arch', 'plus_cross'],
+    colors: {
+      honey_oak: '#FF6B6B',
+      glazed_ceramic: '#2DD4BF',
+      sea_glass: '#A3E635',
+      woven_rattan: '#FB923C',
+    },
+    palette: {
+      honey_oak: { colorHex: '#FF6B6B', accentHex: '#FECDD3' },
+      glazed_ceramic: { colorHex: '#2DD4BF', accentHex: '#99F6E4' },
+      sea_glass: { colorHex: '#A3E635', accentHex: '#D9F99D' },
+      woven_rattan: { colorHex: '#FB923C', accentHex: '#67E8F9' },
+    },
+  },
+  {
+    tier: 3,
+    id: 'L3',
+    label: 'LVL 3',
+    name: 'Orchid Citrine',
+    minScore: 2500,
+    maxScore: 4499,
+    nonClassicWeight: 0.4,
+    accentHex: '#FBBF24',
+    shapeId: 'stair_w',
+    unlockedShapeIds: ['c_arch', 'plus_cross', 'stair_w'],
+    colors: {
+      honey_oak: '#EC4899',
+      glazed_ceramic: '#FACC15',
+      sea_glass: '#38BDF8',
+      woven_rattan: '#C084FC',
+    },
+    palette: {
+      honey_oak: { colorHex: '#EC4899', accentHex: '#FBCFE8' },
+      glazed_ceramic: { colorHex: '#FACC15', accentHex: '#FEF08A' },
+      sea_glass: { colorHex: '#38BDF8', accentHex: '#BAE6FD' },
+      woven_rattan: { colorHex: '#C084FC', accentHex: '#FBBF24' },
+    },
+  },
+  {
+    tier: 4,
+    id: 'L4',
+    label: 'LVL 4',
+    name: 'Crimson Ice',
+    minScore: 4500,
+    maxScore: 6999,
+    nonClassicWeight: 0.5,
+    accentHex: '#22D3EE',
+    shapeId: 't_fork',
+    unlockedShapeIds: ['c_arch', 'plus_cross', 'stair_w', 't_fork'],
+    colors: {
+      honey_oak: '#F43F5E',
+      glazed_ceramic: '#7DD3FC',
+      sea_glass: '#FB923C',
+      woven_rattan: '#FB7185',
+    },
+    palette: {
+      honey_oak: { colorHex: '#F43F5E', accentHex: '#FECDD3' },
+      glazed_ceramic: { colorHex: '#7DD3FC', accentHex: '#E0F2FE' },
+      sea_glass: { colorHex: '#FB923C', accentHex: '#FED7AA' },
+      woven_rattan: { colorHex: '#FB7185', accentHex: '#22D3EE' },
+    },
+  },
+  {
+    tier: 5,
+    id: 'L5',
+    label: 'LVL 5',
+    name: 'Solar Violet',
+    minScore: 7000,
+    maxScore: Infinity,
+    nonClassicWeight: 0.6,
+    accentHex: '#818CF8',
+    shapeId: 'z_bolt',
+    unlockedShapeIds: ['c_arch', 'plus_cross', 'stair_w', 't_fork', 'z_bolt'],
+    colors: {
+      honey_oak: '#F97316',
+      glazed_ceramic: '#A855F7',
+      sea_glass: '#A3E635',
+      woven_rattan: '#FBBF24',
+    },
+    palette: {
+      honey_oak: { colorHex: '#F97316', accentHex: '#FED7AA' },
+      glazed_ceramic: { colorHex: '#A855F7', accentHex: '#E9D5FF' },
+      sea_glass: { colorHex: '#A3E635', accentHex: '#ECFCCB' },
+      woven_rattan: { colorHex: '#FBBF24', accentHex: '#818CF8' },
+    },
+  },
+];
+
+let activeTierState: LevelTierNumber = 1;
+
+export function setActiveTierState(tier: number): void {
+  const clamped = Math.max(1, Math.min(5, Math.floor(tier || 1))) as LevelTierNumber;
+  activeTierState = clamped;
+}
+
+export function getActiveTierState(): LevelTierNumber {
+  return activeTierState;
+}
+
+export function getActiveTier(
+  mode: GameMode,
+  score: number,
+  stageIndex?: number
+): LevelTierConfig {
+  if (mode === 'zen') {
+    const safeScore = Number.isFinite(score) ? Math.max(0, score) : 0;
+    if (safeScore >= 7000) return LEVEL_TIERS[4];
+    if (safeScore >= 4500) return LEVEL_TIERS[3];
+    if (safeScore >= 2500) return LEVEL_TIERS[2];
+    if (safeScore >= 1000) return LEVEL_TIERS[1];
+    return LEVEL_TIERS[0];
+  }
+
+  if (mode === 'story') {
+    if (typeof stageIndex === 'number' && Number.isFinite(stageIndex) && stageIndex >= 1) {
+      const idx = Math.max(1, Math.min(5, Math.floor(stageIndex))) - 1;
+      return LEVEL_TIERS[idx] ?? LEVEL_TIERS[0];
+    }
+    return LEVEL_TIERS[0];
+  }
+
+  return LEVEL_TIERS[0];
+}
+
+export function getTierConfig(tier?: number | LevelTierConfig): LevelTierConfig {
+  if (typeof tier === 'object' && tier !== null) {
+    return tier;
+  }
+  const num = typeof tier === 'number' && Number.isFinite(tier) ? tier : activeTierState;
+  const idx = Math.max(1, Math.min(5, Math.floor(num))) - 1;
+  return LEVEL_TIERS[idx] ?? LEVEL_TIERS[0];
+}
+
+export function getMaterialColor(
+  material: MaterialType,
+  tier?: number | LevelTierConfig
+): MaterialColorPair {
+  const cfg = getTierConfig(tier);
+  return cfg.palette[material] ?? cfg.palette.honey_oak;
+}
+
+export function getMaterialHex(
+  material: MaterialType,
+  tier?: number | LevelTierConfig
+): string {
+  return getMaterialColor(material, tier).colorHex;
+}
+
 function c(coords: [number, number][]): CellCoord[] {
   return coords.map(([r, col]) => ({ r, c: col }));
 }
 
-export const POLYOMINO_CATALOG: PolyominoShape[] = [
+export const CLASSIC_POLYOMINO_CATALOG: PolyominoShape[] = [
   // Tiny (1-2 cells)
   { id: 'dot_1', name: 'Pebble 1×1', cells: c([[0, 0]]), tier: 'tiny', baseWeight: 6 },
   { id: 'domino_h', name: 'Bar 1×2', cells: c([[0, 0], [0, 1]]), tier: 'tiny', baseWeight: 10 },
@@ -84,6 +290,29 @@ export const POLYOMINO_CATALOG: PolyominoShape[] = [
     [1, 0], [1, 1], [1, 2],
     [2, 0], [2, 1], [2, 2],
   ]), tier: 'large', baseWeight: 3 },
+];
+
+// 5 distinct non-Block-Blast pentomino shapes (max 5 cells, 3x2 or 3x3 bounding box, unlocked per tier L1..L5 in zen)
+export const ZEN_PENTOMINO_SHAPES: PolyominoShape[] = [
+  // L1: C-Arch (5 cells: 3-cell top bar + 1-cell legs on both ends)
+  { id: 'c_arch', name: 'C-Arch', cells: c([[0, 0], [0, 1], [0, 2], [1, 0], [1, 2]]), tier: 'large', baseWeight: 7 },
+  // L2: Plus-Cross (5 cells: center + N/S/E/W)
+  { id: 'plus_cross', name: 'Plus-Cross', cells: c([[0, 1], [1, 0], [1, 1], [1, 2], [2, 1]]), tier: 'large', baseWeight: 7 },
+  // L3: Stair-W (5 cells: 3x3 diagonal W staircase)
+  { id: 'stair_w', name: 'Stair-W', cells: c([[0, 0], [1, 0], [1, 1], [2, 1], [2, 2]]), tier: 'large', baseWeight: 7 },
+  // L4: T-Fork (5 cells: 3-cell top bar + 2-cell center stem)
+  { id: 't_fork', name: 'T-Fork', cells: c([[0, 0], [0, 1], [0, 2], [1, 1], [2, 1]]), tier: 'large', baseWeight: 7 },
+  // L5: Z-Bolt (5 cells: 2-cell top-left, 1 center, 2-cell bottom-right)
+  { id: 'z_bolt', name: 'Z-Bolt', cells: c([[0, 0], [0, 1], [1, 1], [2, 1], [2, 2]]), tier: 'large', baseWeight: 7 },
+];
+
+export const NON_CLASSIC_SHAPE_IDS = new Set<string>(
+  ZEN_PENTOMINO_SHAPES.map((s) => s.id)
+);
+
+export const POLYOMINO_CATALOG: PolyominoShape[] = [
+  ...CLASSIC_POLYOMINO_CATALOG,
+  ...ZEN_PENTOMINO_SHAPES,
 ];
 
 export function normalizeCells(cells: CellCoord[]): CellCoord[] {

@@ -1,13 +1,18 @@
 import {
   ARTISAN_MATERIALS,
+  CLASSIC_POLYOMINO_CATALOG,
   createPieceInstance,
+  getActiveTierState,
+  getTierConfig,
   getUniqueOrientations,
   POLYOMINO_CATALOG,
+  ZEN_PENTOMINO_SHAPES,
   type SeededRng,
 } from './shapes';
 import {
   GRID_SIZE,
   type CellCoord,
+  type GameMode,
   type Grid8x8,
   type MaterialType,
   type PieceInstance,
@@ -746,12 +751,13 @@ const DDA_FRIENDLY_SHAPE_IDS = new Set([
 
 export function getWeightedCatalog(
   occupancy: number,
-  ddaBoost = false
+  ddaBoost = false,
+  zenTier?: number
 ): { shape: PolyominoShape; weight: number }[] {
   const highOccupancy = occupancy >= 0.65;
   const criticalOccupancy = occupancy >= 0.8;
 
-  return POLYOMINO_CATALOG.map((shape) => {
+  const classicWeighted = CLASSIC_POLYOMINO_CATALOG.map((shape) => {
     let weight = shape.baseWeight;
     if (criticalOccupancy) {
       if (shape.tier === 'tiny') weight *= 4.0;
@@ -770,6 +776,37 @@ export function getWeightedCatalog(
     }
     return { shape, weight };
   });
+
+  if (zenTier === undefined || zenTier < 1) {
+    return classicWeighted;
+  }
+
+  const tierCfg = getTierConfig(zenTier);
+  const unlockedPentominoes = ZEN_PENTOMINO_SHAPES.slice(0, tierCfg.tier);
+  if (unlockedPentominoes.length === 0) {
+    return classicWeighted;
+  }
+
+  let classicTotal = 0;
+  for (const item of classicWeighted) {
+    classicTotal += item.weight;
+  }
+
+  const targetShare = tierCfg.nonClassicWeight;
+  const totalNonClassicWeight =
+    classicTotal * (targetShare / Math.max(0.01, 1 - targetShare));
+
+  const rawUnits = unlockedPentominoes.map((shape) =>
+    shape.id === tierCfg.shapeId ? 2 : 1
+  );
+  const totalUnits = rawUnits.reduce((acc, v) => acc + v, 0);
+
+  const nonClassicWeighted = unlockedPentominoes.map((shape, idx) => ({
+    shape,
+    weight: (totalNonClassicWeight * rawUnits[idx]) / totalUnits,
+  }));
+
+  return [...classicWeighted, ...nonClassicWeighted];
 }
 
 function pickWeightedShape(
@@ -797,6 +834,8 @@ export interface TrayGenerationOptions {
   minAcornPieces?: number;
   specialChance?: number;
   ddaBoost?: boolean;
+  mode?: GameMode;
+  zenTier?: number;
 }
 
 function decorateTrayPieces(
@@ -876,6 +915,26 @@ function countEmptyCells(grid: Grid8x8): number {
   return count;
 }
 
+function nowMs(): number {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now();
+}
+
+function countOpenPlacementsForTray(
+  masks: FastBoardMasks,
+  trayPieces: PieceInstance[],
+  rotateCharges: number
+): number {
+  let totalPlacements = 0;
+  for (let i = 0; i < trayPieces.length; i++) {
+    const orientations = getUniqueOrientations(trayPieces[i].cells);
+    for (const orient of orientations) {
+      if (orient.steps > rotateCharges) continue;
+      totalPlacements += getAllValidPlacementsMask(masks, orient.cells).length;
+    }
+  }
+  return totalPlacements;
+}
+
 export function generateSolvableTray(
   grid: Grid8x8,
   pocketPiece: PieceInstance | null,
@@ -889,6 +948,87 @@ export function generateSolvableTray(
   }
 
   const occupancy = getBoardOccupancy(grid);
+  const isZen = options?.mode === 'zen' || options?.zenTier !== undefined;
+
+  if (isZen) {
+    const activeTierNum = options?.zenTier ?? getActiveTierState();
+    const weighted = getWeightedCatalog(
+      occupancy,
+      Boolean(options?.ddaBoost),
+      activeTierNum
+    );
+    const masks = gridToMasks(grid);
+    const MAX_CANDIDATE_TRAYS = 6;
+    const deadlineMs = nowMs() + 12;
+
+    let bestCandidate: PieceInstance[] | null = null;
+    let bestOpenPlacements = Infinity;
+
+    for (let attempt = 0; attempt < MAX_CANDIDATE_TRAYS; attempt++) {
+      if (attempt > 0 && nowMs() >= deadlineMs) {
+        break;
+      }
+
+      const candidate = [
+        createPieceInstance(pickWeightedShape(weighted, rng), pickMaterial(rng)),
+        createPieceInstance(pickWeightedShape(weighted, rng), pickMaterial(rng)),
+        createPieceInstance(pickWeightedShape(weighted, rng), pickMaterial(rng)),
+      ];
+
+      if (canSolveTray(grid, candidate, pocketPiece, rotateCharges, true)) {
+        if (nowMs() >= deadlineMs) {
+          return decorateTrayPieces(bestCandidate ?? candidate, rng, options);
+        }
+        const openPlacements = countOpenPlacementsForTray(
+          masks,
+          candidate,
+          rotateCharges
+        );
+        if (openPlacements < bestOpenPlacements) {
+          bestOpenPlacements = openPlacements;
+          bestCandidate = candidate;
+        }
+        if (nowMs() >= deadlineMs) {
+          break;
+        }
+      }
+    }
+
+    if (bestCandidate !== null) {
+      return decorateTrayPieces(bestCandidate, rng, options);
+    }
+
+    // Tight-Board Safety (NO False Game Over):
+    // Fall back to smaller 1-3 cell pieces ensuring at least 1 piece is legally placeable if ANY cell is open.
+    const smallFitting: PolyominoShape[] = [];
+    for (const shape of CLASSIC_POLYOMINO_CATALOG) {
+      if (shape.cells.length > 3) continue;
+      const orientations = getUniqueOrientations(shape.cells);
+      for (const orient of orientations) {
+        if (orient.steps > rotateCharges) continue;
+        if (getAllValidPlacementsMask(masks, orient.cells).length > 0) {
+          smallFitting.push(shape);
+          break;
+        }
+      }
+    }
+
+    smallFitting.sort((a, b) => a.cells.length - b.cells.length);
+    const guaranteedPlaceable = smallFitting[0] ?? CLASSIC_POLYOMINO_CATALOG[0];
+    const pool = smallFitting.length > 0 ? smallFitting : [guaranteedPlaceable];
+    const trayCount = Math.min(3, Math.max(1, emptyCells));
+
+    const fallbackCandidate = Array.from({ length: trayCount }, (_, idx) => {
+      const pickedShape =
+        idx === 0
+          ? guaranteedPlaceable
+          : pool[Math.floor(rng.next() * pool.length)] ?? guaranteedPlaceable;
+      return createPieceInstance(pickedShape, pickMaterial(rng));
+    });
+
+    return decorateTrayPieces(fallbackCandidate, rng, options);
+  }
+
   const weighted = getWeightedCatalog(occupancy, Boolean(options?.ddaBoost));
 
   for (let attempt = 0; attempt < 48; attempt++) {
@@ -908,7 +1048,7 @@ export function generateSolvableTray(
 
   const masks = gridToMasks(grid);
   const fittingShapes: PolyominoShape[] = [];
-  for (const shape of POLYOMINO_CATALOG) {
+  for (const shape of CLASSIC_POLYOMINO_CATALOG) {
     const orientations = getUniqueOrientations(shape.cells);
     let fits = false;
     for (const orient of orientations) {

@@ -1,4 +1,9 @@
 import React from 'react';
+import {
+  getActiveTierState,
+  getMaterialColor,
+  type LevelTierNumber,
+} from '../game/shapes';
 import type {
   BoardShapeId,
   MaterialType,
@@ -6,9 +11,14 @@ import type {
   TileSkinId,
 } from '../game/types';
 
+export const ActiveTierContext = React.createContext<LevelTierNumber | undefined>(
+  undefined
+);
+
 interface ArtisanTileProps {
   lightweight?: boolean;
   material: MaterialType;
+  tier?: LevelTierNumber;
   tileSkin?: TileSkinId;
   className?: string;
   ghost?: boolean;
@@ -289,6 +299,7 @@ const COLORBLIND_SYMBOL_MAP: Record<MaterialType, string> = {
 export const ArtisanTile: React.FC<ArtisanTileProps> = React.memo(
   ({
     material,
+    tier,
     tileSkin = 'classic',
     className = '',
     ghost = false,
@@ -300,6 +311,10 @@ export const ArtisanTile: React.FC<ArtisanTileProps> = React.memo(
     compact = false,
     lightweight = false,
   }) => {
+    const contextTier = React.useContext(ActiveTierContext);
+    const activeTierNum = tier ?? contextTier ?? getActiveTierState();
+    const { colorHex, accentHex } = getMaterialColor(material, activeTierNum);
+
     const animClass = clearing
       ? 'animate-line-clear'
       : justPlaced
@@ -312,141 +327,41 @@ export const ArtisanTile: React.FC<ArtisanTileProps> = React.memo(
       : '';
 
     if (lightweight) {
-      const color = { honey_oak: '#BD803A', glazed_ceramic: '#98BDAA', sea_glass: '#63AAA5', woven_rattan: '#C3A375' };
-      const fill = color[material];
       return (
-        <div aria-hidden="true" style={{ backgroundColor: fill }}
-          className={`absolute inset-0 rounded-[5px] border border-black/15 ${opacityClass} ${animClass} ${className}`}>
+        <div
+          aria-hidden="true"
+          style={{ backgroundColor: colorHex }}
+          className={`absolute inset-0 rounded-[5px] border border-black/15 ${opacityClass} ${animClass} ${className}`}
+        >
           {special && <SpecialOverlay special={special} compact />}
-          <span className="colorblind-material-symbol absolute inset-0 items-center justify-center text-xs font-bold text-black">{COLORBLIND_SYMBOL_MAP[material]}</span>
-          {hasAcornGem && <span className="absolute inset-0 grid place-items-center text-xs">◆</span>}
+          <span className="colorblind-material-symbol absolute inset-0 items-center justify-center text-xs font-bold text-black">
+            {COLORBLIND_SYMBOL_MAP[material]}
+          </span>
+          {hasAcornGem && (
+            <span className="absolute inset-0 grid place-items-center text-xs">◆</span>
+          )}
         </div>
       );
     }
 
-    let innerContent: React.ReactNode = null;
-    let baseStyle: React.CSSProperties = {};
-
-    if (material === 'honey_oak') {
-      baseStyle = {
-        background:
-          'linear-gradient(145deg, #E3A857 0%, #C47D2C 55%, #9B5A18 100%)',
-        boxShadow: ghost
-          ? 'none'
-          : 'inset 0 2px 1px rgba(255,244,214,0.55), inset 0 -2px 2px rgba(72,36,8,0.45), 0 2px 3px rgba(30,18,8,0.25)',
-      };
-      innerContent = (
-        <>
-          <svg
-            viewBox="0 0 40 40"
-            className="absolute inset-0 w-full h-full pointer-events-none opacity-35"
-            aria-hidden="true"
-          >
-            <path d="M0 9 Q 14 6, 26 10 T 40 8" fill="none" stroke="#5C3009" strokeWidth="1.2" />
-            <path d="M0 20 Q 12 23, 25 19 T 40 21" fill="none" stroke="#5C3009" strokeWidth="1.1" />
-            <path d="M0 31 Q 18 28, 30 32 T 40 30" fill="none" stroke="#5C3009" strokeWidth="1.2" />
-            <ellipse cx="27" cy="19" rx="3.2" ry="1.8" fill="none" stroke="#5C3009" strokeWidth="0.9" />
-          </svg>
-          <div className="absolute inset-[2px] rounded-[4px] border border-amber-100/25 pointer-events-none" />
-        </>
-      );
-    } else if (material === 'glazed_ceramic') {
-      baseStyle = {
-        background:
-          'linear-gradient(150deg, #FBF7EE 0%, #D9E8DE 48%, #88B39C 100%)',
-        boxShadow: ghost
-          ? 'none'
-          : 'inset 0 2px 2px rgba(255,255,255,0.85), inset 0 -2px 3px rgba(30,58,47,0.32), 0 2px 3px rgba(20,40,30,0.2)',
-      };
-      innerContent = (
-        <>
-          <div
-            className="absolute -top-2 -left-2 w-3/4 h-3/4 rounded-full pointer-events-none"
-            style={{
-              background:
-                'linear-gradient(135deg, rgba(255,255,255,0.72) 0%, rgba(255,255,255,0) 65%)',
-            }}
-          />
-          <svg
-            viewBox="0 0 40 40"
-            className="absolute inset-0 w-full h-full pointer-events-none opacity-45"
-            aria-hidden="true"
-          >
-            <path
-              d="M12 28 C12 18, 20 12, 28 12 C28 20, 22 28, 12 28 Z"
-              fill="#1E3A2F"
-              fillOpacity="0.22"
-              stroke="#1E3A2F"
-              strokeWidth="1.2"
-            />
-            <path d="M12 28 L25 15" stroke="#1E3A2F" strokeWidth="1" strokeLinecap="round" />
-          </svg>
-        </>
-      );
-    } else if (material === 'sea_glass') {
-      baseStyle = {
-        background:
-          'linear-gradient(145deg, rgba(45, 212, 191, 0.88) 0%, rgba(15, 118, 110, 0.92) 60%, rgba(17, 94, 89, 0.96) 100%)',
-        boxShadow: ghost
-          ? 'none'
-          : 'inset 0 0 8px rgba(254, 243, 199, 0.55), inset 0 2px 1px rgba(204, 251, 241, 0.75), inset 0 -2px 2px rgba(6, 48, 44, 0.5), 0 2px 4px rgba(10, 50, 48, 0.28)',
-      };
-      innerContent = (
-        <>
-          <div
-            className="absolute inset-[3px] rounded-[4px] pointer-events-none"
-            style={{
-              background:
-                'radial-gradient(circle at 30% 28%, rgba(253, 230, 138, 0.45) 0%, rgba(153, 246, 228, 0.12) 52%, transparent 80%)',
-              border: '1px solid rgba(255,255,255,0.35)',
-            }}
-          />
-          <svg
-            viewBox="0 0 40 40"
-            className="absolute inset-0 w-full h-full pointer-events-none opacity-65"
-            aria-hidden="true"
-          >
-            <circle cx="11" cy="11" r="2.2" fill="#FEF3C7" fillOpacity="0.65" />
-            <circle cx="16" cy="8.5" r="1.1" fill="#FFFFFF" fillOpacity="0.6" />
-          </svg>
-        </>
-      );
-    } else {
-      baseStyle = {
-        background:
-          'linear-gradient(145deg, #DFB985 0%, #BD8A4A 58%, #8F6029 100%)',
-        boxShadow: ghost
-          ? 'none'
-          : 'inset 0 2px 1px rgba(255,248,230,0.5), inset 0 -2px 2px rgba(64,38,12,0.48), 0 2px 3px rgba(32,20,8,0.25)',
-      };
-      innerContent = (
-        <>
-          <svg
-            viewBox="0 0 40 40"
-            className="absolute inset-0 w-full h-full pointer-events-none opacity-45"
-            aria-hidden="true"
-          >
-            <rect x="0" y="6" width="40" height="4" fill="#6E4418" fillOpacity="0.35" />
-            <rect x="0" y="18" width="40" height="4" fill="#6E4418" fillOpacity="0.35" />
-            <rect x="0" y="30" width="40" height="4" fill="#6E4418" fillOpacity="0.35" />
-            <rect x="6" y="0" width="4" height="40" fill="#FDE6BA" fillOpacity="0.32" />
-            <rect x="18" y="0" width="4" height="40" fill="#FDE6BA" fillOpacity="0.32" />
-            <rect x="30" y="0" width="4" height="40" fill="#FDE6BA" fillOpacity="0.32" />
-          </svg>
-          <div className="absolute inset-[2px] rounded-[4px] border border-amber-950/20 pointer-events-none" />
-        </>
-      );
-    }
-
-
+    const baseStyle: React.CSSProperties = {
+      backgroundColor: colorHex,
+      boxShadow: ghost
+        ? 'none'
+        : 'inset 0 1.5px 1px rgba(255,255,255,0.42), inset 0 -1.5px 2px rgba(0,0,0,0.28)',
+    };
 
     return (
       <div
         data-tile-skin={tileSkin}
-        className={`relative w-full h-full rounded-[6px] overflow-hidden select-none ${animClass} ${opacityClass} ${clearRing} ${className}`}
+        className={`relative w-full h-full rounded-[6px] overflow-hidden select-none border border-black/15 ${animClass} ${opacityClass} ${clearRing} ${className}`}
         style={baseStyle}
       >
-        {innerContent}
+        <div
+          aria-hidden="true"
+          className="absolute inset-[1.5px] rounded-[4px] pointer-events-none opacity-35"
+          style={{ border: `1px solid ${accentHex}` }}
+        />
         <span
           aria-hidden="true"
           data-testid={`colorblind-symbol-${material}`}
