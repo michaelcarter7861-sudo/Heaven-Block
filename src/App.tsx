@@ -27,6 +27,7 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-react';
+import { ActiveTierContext } from './components/ArtisanTile';
 import { GameBoard } from './components/GameBoard';
 import {
   GameOverModal,
@@ -107,12 +108,15 @@ import {
 } from './game/nativeBridge';
 import {
   generateSeedCode,
+  getActiveTier,
+  getMaterialColor,
   getShapeDimensions,
   hashSeedCode,
   MATERIAL_META,
   mulberry32,
   normalizeSeedCode,
   rotatePieceCW,
+  setActiveTierState,
 } from './game/shapes';
 import {
   applyStoreProductFulfillment,
@@ -203,16 +207,6 @@ function updateDragGhost(node: HTMLDivElement | null, session: DragSession | nul
   node.style.transform = `translate3d(${session.clientX}px, ${session.clientY + lift}px, 0) translate(-50%, -50%) scale(1.04)`;
 }
 
-const MATERIAL_PARTICLE_COLORS: Record<
-  MaterialType,
-  { colorHex: string; accentHex: string }
-> = {
-  honey_oak: { colorHex: '#D98A3A', accentHex: '#F3C677' },
-  glazed_ceramic: { colorHex: '#2C8C7C', accentHex: '#A5E8D5' },
-  sea_glass: { colorHex: '#E07A2F', accentHex: '#FDE68A' },
-  woven_rattan: { colorHex: '#A67C52', accentHex: '#EAD3B1' },
-};
-
 function getFirstAvailableSource(
   tray: (PieceInstance | null)[],
   pocket: PieceInstance | null
@@ -244,9 +238,16 @@ function computeStarsForLevel(score: number, levelDef: LevelDefinition): number 
 
 function getTrayOptionsForLevel(
   levelDef: LevelDefinition,
-  ddaBoost = false
+  ddaBoost = false,
+  mode?: GameMode,
+  score = 0
 ): TrayGenerationOptions {
-  return getLevelTrayOptions(levelDef, ddaBoost);
+  const base = getLevelTrayOptions(levelDef, ddaBoost);
+  if (mode === 'zen') {
+    const tier = getActiveTier('zen', score);
+    return { ...base, mode: 'zen', zenTier: tier.tier };
+  }
+  return base;
 }
 
 function toTraySlots(pieces: PieceInstance[]): (PieceInstance | null)[] {
@@ -429,13 +430,14 @@ export default function App() {
       return createLevel2OpeningTray();
     }
     const initDda = mode === 'story' && (initialSaved.levelLosses[levelNumber] ?? 0) >= 2;
+    const initScore = duelParam ? 0 : initialSaved.activeRun?.score ?? 0;
     return toTraySlots(
       generateSolvableTray(
         grid,
         null,
         START_SPINS,
         rngRef.current,
-        getTrayOptionsForLevel(activeLevelDef, initDda)
+        getTrayOptionsForLevel(activeLevelDef, initDda, mode, initScore)
       )
     );
   });
@@ -446,6 +448,12 @@ export default function App() {
   const [score, setScore] = useState<number>(
     () => (duelParam ? 0 : initialSaved.activeRun?.score ?? 0)
   );
+
+  const activeTier = useMemo(
+    () => getActiveTier(mode, score, mode === 'story' ? 1 : undefined),
+    [mode, score]
+  );
+  setActiveTierState(activeTier.tier);
   const [combo, setCombo] = useState<number>(
     () => (duelParam ? 0 : initialSaved.activeRun?.combo ?? 0)
   );
@@ -952,7 +960,7 @@ export default function App() {
                   null,
                   START_SPINS,
                   rng,
-                  getTrayOptionsForLevel(def, ddaBoost)
+                  getTrayOptionsForLevel(def, ddaBoost, targetMode, 0)
                 )
               );
 
@@ -1171,7 +1179,7 @@ export default function App() {
             nextPocket,
             nextRotateCharges,
             rngRef.current,
-            getTrayOptionsForLevel(activeLevelDef, ddaBoost)
+            getTrayOptionsForLevel(activeLevelDef, ddaBoost, mode, nextScore)
           )
         );
         setTrayWaveId((w) => w + 1);
@@ -1187,6 +1195,11 @@ export default function App() {
         // Build material-matched particle bursts (capped for 60fps mobile)
         const bursts: ClearedParticleBurst[] = [];
         const stamp = Date.now();
+        const nextActiveTier = getActiveTier(
+          mode,
+          nextScore,
+          mode === 'story' ? 1 : undefined
+        );
         for (const keyStr of outcome.allClearedKeys) {
           if (bursts.length >= 24) break;
           const [rStr, cStr] = keyStr.split('_');
@@ -1194,7 +1207,7 @@ export default function App() {
           const bc = Number(cStr);
           const prevCell = grid[br]?.[bc];
           const mat: MaterialType = prevCell?.material ?? piece.material;
-          const palette = MATERIAL_PARTICLE_COLORS[mat];
+          const palette = getMaterialColor(mat, nextActiveTier);
           bursts.push({
             id: `${stamp}_${keyStr}`,
             r: br,
@@ -1470,7 +1483,7 @@ export default function App() {
             nextPocket,
             rotateCharges,
             rngRef.current,
-            getTrayOptionsForLevel(activeLevelDef, ddaBoost)
+            getTrayOptionsForLevel(activeLevelDef, ddaBoost, mode, score)
           )
         );
       }
@@ -1673,7 +1686,7 @@ export default function App() {
             pocket,
             rotateCharges,
             rngRef.current,
-            getTrayOptionsForLevel(activeLevelDef, ddaBoost)
+            getTrayOptionsForLevel(activeLevelDef, ddaBoost, mode, score)
           )
         );
         setTrayWaveId((w) => w + 1);
@@ -2844,6 +2857,7 @@ export default function App() {
   const conservatory = conservatoryTheme(score, nightCandleMode);
 
   return (
+    <ActiveTierContext.Provider value={activeTier.tier}>
     <div
       data-conservatory={conservatory}
       data-puzzle-ambience={puzzleAmbience}
@@ -2856,6 +2870,19 @@ export default function App() {
             <div className="flex min-w-0 items-center gap-2">
               <button aria-label="Pause game" type="button" className="grid size-10 shrink-0 place-items-center rounded-xl border border-current/20" onClick={() => { if (phase === 'playing' && !dragSessionRef.current) setPhase('paused'); }}><Pause className="size-4" /></button>
               <span className="min-w-0 truncate font-display font-bold">{mode === 'duel' ? `Daily · ${seedCode.replace(/^DAILY-/, '')}` : 'Endless Zen'}</span>
+              {mode === 'zen' && (
+                <span
+                  data-testid="zen-tier-indicator"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-md border border-current/25 bg-current/5 px-1.5 py-0.5 font-mono-num text-[10px] font-bold tracking-wider"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="size-1.5 rounded-full"
+                    style={{ backgroundColor: activeTier.accentHex }}
+                  />
+                  {activeTier.label}
+                </span>
+              )}
             </div>
             <dl className="flex gap-3 text-right text-[10px] font-semibold">
               <div><dt>Score</dt><dd data-testid="score-value" className="font-mono-num text-sm">{score.toLocaleString()}</dd></div>
@@ -2885,17 +2912,32 @@ export default function App() {
             <Pause className="w-4 h-4" />
           </button>
           <div className="flex flex-col min-w-0">
-            <span className="font-display text-sm sm:text-base font-bold leading-tight text-[#1E3A2F] dark:text-amber-200 truncate">
-              {appView === 'haven'
-                ? 'My Cozy Haven'
-                : mode === 'story'
-                  ? `Lv ${levelNumber} · ${activeLevelDef.title}`
-                  : mode === 'duel'
-                    ? isDailyPuzzleSeed(seedCode)
-                      ? `Daily · ${seedCode.replace(/^DAILY-/, '')}`
-                      : `Duel · ${seedCode}`
-                    : 'Endless Zen'}
-            </span>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="font-display text-sm sm:text-base font-bold leading-tight text-[#1E3A2F] dark:text-amber-200 truncate">
+                {appView === 'haven'
+                  ? 'My Cozy Haven'
+                  : mode === 'story'
+                    ? `Lv ${levelNumber} · ${activeLevelDef.title}`
+                    : mode === 'duel'
+                      ? isDailyPuzzleSeed(seedCode)
+                        ? `Daily · ${seedCode.replace(/^DAILY-/, '')}`
+                        : `Duel · ${seedCode}`
+                      : 'Endless Zen'}
+              </span>
+              {appView !== 'haven' && mode === 'zen' && (
+                <span
+                  data-testid="zen-tier-indicator"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-md border border-current/25 bg-current/5 px-1.5 py-0.5 font-mono-num text-[10px] font-bold tracking-wider"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="size-1.5 rounded-full"
+                    style={{ backgroundColor: activeTier.accentHex }}
+                  />
+                  {activeTier.label}
+                </span>
+              )}
+            </div>
             <span className="text-[11px] text-[#7A654F] dark:text-[#A4907B] truncate">
               {appView === 'haven'
                 ? 'Spend Cozy Stars to decorate'
@@ -3895,5 +3937,6 @@ export default function App() {
       {/* Simulated 2s Play Store Rewarded Ad Overlay (Native Only) */}
       {adStatus?.active && nativeRuntime && <RewardedAdModal status={adStatus} />}
     </div>
+    </ActiveTierContext.Provider>
   );
 }
