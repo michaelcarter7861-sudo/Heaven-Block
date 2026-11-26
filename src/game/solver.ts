@@ -5,6 +5,7 @@ import {
   getActiveTierState,
   getTierConfig,
   getUniqueOrientations,
+  NON_CLASSIC_SHAPE_IDS,
   POLYOMINO_CATALOG,
   ZEN_PENTOMINO_SHAPES,
   type SeededRng,
@@ -792,7 +793,10 @@ export function getWeightedCatalog(
     classicTotal += item.weight;
   }
 
-  const targetShare = tierCfg.nonClassicWeight;
+  // Balance lock (arena/104b5d58): zen non-classic spawn share is half the
+  // legacy tier config, so L1..L5 spawn at 10% / 15% / 20% / 25% / 30%
+  // instead of the punishing 20% … 60% ramp.
+  const targetShare = Math.max(0.01, Math.min(0.99, tierCfg.nonClassicWeight * 0.5));
   const totalNonClassicWeight =
     classicTotal * (targetShare / Math.max(0.01, 1 - targetShare));
 
@@ -952,50 +956,108 @@ export function generateSolvableTray(
 
   if (isZen) {
     const activeTierNum = options?.zenTier ?? getActiveTierState();
+    const tierCfg = getTierConfig(activeTierNum);
+    // Balance lock (arena/104b5d58): non-classic spawn share halves the legacy
+    // tier config (L1 10% … L5 30%), and a tray carries at most one
+    // non-classic pentomino so the other two slots stay classic and playable.
+    const targetShare = Math.max(0.01, Math.min(0.99, tierCfg.nonClassicWeight * 0.5));
     const weighted = getWeightedCatalog(
       occupancy,
       Boolean(options?.ddaBoost),
       activeTierNum
     );
+    const classicPool = weighted.filter(
+      (item) => !NON_CLASSIC_SHAPE_IDS.has(item.shape.id)
+    );
+    const nonClassicPool = weighted.filter((item) =>
+      NON_CLASSIC_SHAPE_IDS.has(item.shape.id)
+    );
     const masks = gridToMasks(grid);
     const MAX_CANDIDATE_TRAYS = 6;
     const deadlineMs = nowMs() + 12;
 
-    let bestCandidate: PieceInstance[] | null = null;
-    let bestOpenPlacements = Infinity;
+    // Build one 3-piece candidate honoring the hard cap: maximum 1 non-classic
+    // pentomino per tray, sitting in a uniformly random slot.
+    const buildZenCandidate = (): PieceInstance[] => {
+      const slots = [0, 1, 2];
+      for (let i = slots.length - 1; i > 0; i--) {
+        const j = Math.floor(rng.next() * (i + 1));
+        [slots[i], slots[j]] = [slots[j], slots[i]];
+      }
+      const pieces: PieceInstance[] = [];
+      const includeNonClassic =
+        nonClassicPool.length > 0 && rng.next() < targetShare;
+      const nonClassicSlot = includeNonClassic ? slots[0] : -1;
+      for (const slot of slots) {
+        pieces[slot] = createPieceInstance(
+          pickWeightedShape(
+            slot === nonClassicSlot ? nonClassicPool : classicPool,
+            rng
+          ),
+          pickMaterial(rng)
+        );
+      }
+      return pieces;
+    };
+
+    interface OpenTray {
+      pieces: PieceInstance[];
+      openPlacements: number;
+    }
+    const solvable: OpenTray[] = [];
 
     for (let attempt = 0; attempt < MAX_CANDIDATE_TRAYS; attempt++) {
       if (attempt > 0 && nowMs() >= deadlineMs) {
         break;
       }
 
-      const candidate = [
-        createPieceInstance(pickWeightedShape(weighted, rng), pickMaterial(rng)),
-        createPieceInstance(pickWeightedShape(weighted, rng), pickMaterial(rng)),
-        createPieceInstance(pickWeightedShape(weighted, rng), pickMaterial(rng)),
-      ];
+      const candidate = buildZenCandidate();
 
       if (canSolveTray(grid, candidate, pocketPiece, rotateCharges, true)) {
         if (nowMs() >= deadlineMs) {
-          return decorateTrayPieces(bestCandidate ?? candidate, rng, options);
+          return decorateTrayPieces(
+            solvable.length > 0 ? solvable[0].pieces : candidate,
+            rng,
+            options
+          );
         }
-        const openPlacements = countOpenPlacementsForTray(
-          masks,
-          candidate,
-          rotateCharges
-        );
-        if (openPlacements < bestOpenPlacements) {
-          bestOpenPlacements = openPlacements;
-          bestCandidate = candidate;
-        }
+        solvable.push({
+          pieces: candidate,
+          openPlacements: countOpenPlacementsForTray(
+            masks,
+            candidate,
+            rotateCharges
+          ),
+        });
         if (nowMs() >= deadlineMs) {
           break;
         }
       }
     }
 
-    if (bestCandidate !== null) {
-      return decorateTrayPieces(bestCandidate, rng, options);
+    if (solvable.length > 0) {
+      const tier = activeTierNum;
+      let chosen: PieceInstance[];
+      if (tier <= 2) {
+        // L1 & L2 (0-2,499): normal fair solvable trays. Never tighten.
+        chosen = solvable[0].pieces;
+      } else if (tier === 3) {
+        // L3 (2,500-4,499): moderate / median-openness solvable tray.
+        const byOpenness = [...solvable].sort(
+          (a, b) => a.openPlacements - b.openPlacements
+        );
+        chosen = byOpenness[Math.floor(byOpenness.length / 2)].pieces;
+      } else {
+        // L4 & L5 (4,500+): tightest tray on at most 40% of trays; a flow
+        // tray otherwise so players keep breathing room to build combos.
+        const tightest = solvable.reduce(
+          (best, cur) =>
+            cur.openPlacements < best.openPlacements ? cur : best,
+          solvable[0]
+        );
+        chosen = rng.next() < 0.4 ? tightest.pieces : solvable[0].pieces;
+      }
+      return decorateTrayPieces(chosen, rng, options);
     }
 
     // Tight-Board Safety (NO False Game Over):

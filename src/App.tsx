@@ -501,8 +501,11 @@ export default function App() {
     null
   );
   const [viewFinalBoard, setViewFinalBoard] = useState(false);
+  const [gameOverLocked, setGameOverLocked] = useState(false);
+  const [showGameOverModal, setShowGameOverModal] = useState(false);
   const [reviveStatus, setReviveStatus] = useState<string | null>(null);
   const dragHoverRef = useRef<{ row?: number; col?: number; overPocket: boolean }>({ overPocket: false });
+  const gameOverTimerRef = useRef<number | null>(null);
   const [dragSession, setDragSession] = useState<Pick<DragSession, 'source' | 'piece' | 'hasMoved'> | null>(null);
   const [boardCellPx, setBoardCellPx] = useState(40);
   const [dragPreviewAnchor, setDragPreviewAnchor] = useState<{ r: number; c: number } | null>(null);
@@ -905,6 +908,17 @@ export default function App() {
       }
       document.body.dataset.state = 'gameover';
       setPhase('gameover');
+
+      // Board-first fairness: lock input, show a slim non-blocking banner that
+      // does not cover the board, wait 1,800 ms so the player can verify no
+      // moves remain, and only then reveal the Game Over modal.
+      setGameOverLocked(true);
+      if (gameOverTimerRef.current) window.clearTimeout(gameOverTimerRef.current);
+      const timer = window.setTimeout(() => {
+        gameOverTimerRef.current = null;
+        setShowGameOverModal(true);
+      }, 1800);
+      gameOverTimerRef.current = timer;
     },
     [
       mode,
@@ -917,6 +931,11 @@ export default function App() {
     ]
   );
 
+  const handleViewBoard = useCallback(() => {
+    setShowGameOverModal(false);
+    setViewFinalBoard(true);
+  }, []);
+
   const startRun = useCallback(
     (targetMode: GameMode, targetLevel: number, customSeed?: string) => {
       if (clearTimerRef.current) {
@@ -925,6 +944,12 @@ export default function App() {
       }
 
       setViewFinalBoard(false);
+      setGameOverLocked(false);
+      setShowGameOverModal(false);
+      if (gameOverTimerRef.current) {
+        window.clearTimeout(gameOverTimerRef.current);
+        gameOverTimerRef.current = null;
+      }
       const nextSeed =
         targetMode === 'duel'
           ? normalizeSeedCode(customSeed ?? seedCode)
@@ -2497,6 +2522,16 @@ export default function App() {
     return () => observer.disconnect();
   }, [appView, phase]);
 
+  // Clear any pre-modal Game Over timer on unmount/restart so no stale modal fires.
+  useEffect(() => {
+    return () => {
+      if (gameOverTimerRef.current) {
+        window.clearTimeout(gameOverTimerRef.current);
+        gameOverTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const activePreview: PlacementPreview | null = useMemo(() => {
     if (phase !== 'playing') return null;
     if (dragSession?.hasMoved) {
@@ -2598,6 +2633,23 @@ export default function App() {
   const catCurious = useMemo(() => phase === 'playing' && movesPlaced > 0 && tray.some(
     piece => piece && !canPlacePieceAnywhere(grid, piece, rotateCharges),
   ), [phase, movesPlaced, tray, grid, rotateCharges]);
+
+  // Fairness: a run is only Game Over when the tray has no playable piece AND
+  // the Pocket is empty or its piece also has no legal placement. While the
+  // tray is stuck but Pocket still has a move, keep the run alive and show a
+  // non-blocking hint on the Pocket button.
+  const trayHasAnyMove = useMemo(
+    () => tray.some((piece) => Boolean(piece && canPlacePieceAnywhere(grid, piece, rotateCharges))),
+    [grid, tray, rotateCharges]
+  );
+  const pocketHasAnyMove = useMemo(
+    () => Boolean(pocket && canPlacePieceAnywhere(grid, pocket, rotateCharges)),
+    [grid, pocket, rotateCharges]
+  );
+  const showPocketHint = useMemo(
+    () => phase === 'playing' && !trayHasAnyMove && pocketHasAnyMove,
+    [phase, trayHasAnyMove, pocketHasAnyMove]
+  );
 
   const nativeRuntime = isNativePlatform();
 
@@ -3376,14 +3428,14 @@ export default function App() {
           {isDailyRun ? (
             <>
               {dailyMilestoneProgress && dailyMilestoneProgress.completed > 0 && (
-                <p data-testid="daily-goal-complete" className="rounded-full border border-current/20 px-3 py-0.5 text-xs font-bold">{dailyMilestoneProgress?.finished ? 'All Daily Milestones Complete ✓' : 'Daily Goal Complete ✓'}</p>
+                <p data-testid="daily-goal-complete" className="rounded-full border border-current/20 px-2 py-0.5 text-[10px] font-bold">{dailyMilestoneProgress?.finished ? 'All Daily Milestones Complete ✓' : 'Daily Goal Complete ✓'}</p>
               )}
               {dailyMilestoneProgress && !dailyMilestoneProgress.finished && (
                 <div
                   data-testid="goal-progress-bar"
-                  className="w-full px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl border bg-[#EFE4D2] border-[#D4C0A3] dark:bg-[#17120E] dark:border-[#36281D]"
+                  className="w-full px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-xl border bg-[#EFE4D2] border-[#D4C0A3] dark:bg-[#17120E] dark:border-[#36281D]"
                 >
-                  <div className="flex items-center justify-between text-[11px] sm:text-xs font-semibold mb-0.5 sm:mb-1">
+                  <div className="flex items-center justify-between text-[10px] sm:text-xs font-semibold mb-0.5 sm:mb-0.5">
                     <span className="text-[#2A1F15] dark:text-[#F5EDE1]">
                       {dailyMilestoneProgress.completed === 0
                         ? 'Daily Haven Target (1,500+)'
@@ -3403,10 +3455,10 @@ export default function App() {
               )}
             </>
           ) : mode !== 'zen' && (
-            <div
-              data-testid="goal-progress-bar"
-              className="w-full px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl border bg-[#EFE4D2] border-[#D4C0A3] dark:bg-[#17120E] dark:border-[#36281D]"
-            >
+          <div
+            data-testid="goal-progress-bar"
+            className="w-full px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-xl border bg-[#EFE4D2] border-[#D4C0A3] dark:bg-[#17120E] dark:border-[#36281D]"
+          >
               <div className="flex items-center justify-between text-[11px] sm:text-xs font-semibold mb-0.5 sm:mb-1">
                 <span className="text-[#2A1F15] dark:text-[#F5EDE1]">
                   {goal.label}
@@ -3424,6 +3476,16 @@ export default function App() {
             </div>
           )}
 
+          {/* Slim non-blocking banner shown during the pre-modal Game Over inspection pause;
+               placed above the board so it never covers the 8x8 grid. */}
+          {phase === 'gameover' && gameOverLocked && !showGameOverModal && (
+            <div
+              data-testid="no-moves-left-banner"
+              className="w-full py-1.5 text-[10px] font-bold text-center text-amber-900 dark:text-amber-100 bg-amber-100/70 dark:bg-amber-900/40 border-b border-amber-300/40 dark:border-amber-500/30"
+            >
+              No Moves Left
+            </div>
+          )}
           <ConservatorySill delighted={phase === 'playing' && (combo >= 2 || clearingKeys.size > 0)} curious={catCurious} />
           <GameBoard
             decoration={mode === 'zen' && catNap && <NappingCat row={catNap.r} col={catNap.c} />}
@@ -3562,13 +3624,15 @@ export default function App() {
             </div>
           )}
 
-          {/* Anti-Frustration Controls */}
-          <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+          {/* Anti-Frustration Controls — STRICT fixed-height strip (max 64px).
+               The Pocket card can never stretch this row and clip the
+               3-piece tray below; an occupied Pocket scales its preview down. */}
+          <div className="grid grid-cols-3 gap-1.5 sm:gap-2 h-[64px] sm:h-[64px] overflow-hidden">
             {/* Cozy Pocket */}
             <div
               ref={pocketRef}
               data-testid="pocket-card"
-              className={`relative flex min-h-[58px] flex-col items-stretch rounded-xl border p-1.5 transition-colors sm:min-h-[73px] sm:p-2 ${
+              className={`relative flex min-h-[56px] sm:min-h-[60px] flex-col items-stretch rounded-xl border p-1 sm:p-1.5 transition-colors ${
                 isOverPocket
                   ? 'ring-2 ring-amber-500 bg-amber-100/90 border-amber-500 dark:bg-amber-500/20 dark:border-amber-400'
                   : selectedSource?.kind === 'pocket'
@@ -3576,64 +3640,66 @@ export default function App() {
                     : 'bg-[#EFE4D2] border-[#D4C0A3] dark:bg-[#191410] dark:border-[#3A2B1F]'
               }`}
             >
-              <button
-                type="button"
-                data-testid="pocket-slot"
-                onClick={handlePocketClick}
-                onPointerDown={(e) => {
-                  if (pocket && (!canSwapOrPark || pocketCooldown > 0)) {
-                    startPieceDrag(e, { kind: 'pocket' }, pocket);
-                  }
-                }}
-                aria-label={
-                  pocket
-                    ? `Cozy Pocket holding ${pocket.name}. ${canSwapOrPark ? 'Click to swap with selected tray piece' : 'Drag or tap to place'}`
-                    : canSwapOrPark
-                      ? 'Cozy Pocket empty. Click or drag a piece here to hold'
-                      : 'Cozy Pocket reserve slot empty'
-                }
-                className="flex min-h-[38px] flex-1 touch-none flex-col items-center justify-between rounded-lg sm:min-h-[49px]"
-              >
-                <div className="flex w-full items-center justify-between text-[10px] font-semibold text-[#6E5A46] dark:text-[#B4A08A]">
-                  <span>Pocket</span>
-                  <Inbox className="h-3 w-3" />
-                </div>
-
-                <div className="flex flex-1 items-center justify-center py-0.5 sm:py-1">
-                  {pocket && !(
-                    dragSession?.hasMoved &&
-                    dragSession.source.kind === 'pocket'
-                  ) ? (
-                    <PiecePreview
-                      piece={pocket}
-                      cellSize={13}
-                      gap={1.5}
-                      tileSkin={activeTileSkin}
-                    />
-                  ) : (
-                    <span className="text-[11px] font-medium text-[#8C7760] dark:text-[#786552]">
-                      {canSwapOrPark ? 'Tap / Drop' : 'Hold 1'}
-                    </span>
-                  )}
-                </div>
-              </button>
-
-              {pocketCooldown > 0 ? (
                 <button
                   type="button"
-                  data-testid="pocket-skip-ad"
-                  onClick={() => void handlePocketSkip()}
-                  aria-label="Watch an optional ad to make Pocket ready now"
-                  className="mt-0.5 flex h-5 items-center justify-center gap-1 rounded-md bg-[#1F3A34] text-[9px] font-bold text-[#F6EFE4] transition-colors hover:bg-[#274C3D] dark:bg-[#D2A16B] dark:text-[#17241E] dark:hover:bg-[#E1B882]"
+                  data-testid="pocket-slot"
+                  onClick={handlePocketClick}
+                  onPointerDown={(e) => {
+                    if (pocket && (!canSwapOrPark || pocketCooldown > 0)) {
+                      startPieceDrag(e, { kind: 'pocket' }, pocket);
+                    }
+                  }}
+                  aria-label={
+                    pocket
+                      ? `Cozy Pocket holding ${pocket.name}. ${canSwapOrPark ? 'Click to swap with selected tray piece' : 'Drag or tap to place'}`
+                      : canSwapOrPark
+                        ? 'Cozy Pocket empty. Click or drag a piece here to hold'
+                        : 'Cozy Pocket reserve slot empty'
+                  }
+                  className="flex min-h-[36px] sm:min-h-[44px] flex-1 touch-none flex-col items-center justify-between rounded-lg"
                 >
-                  <span aria-hidden="true">▶</span>
-                  <span>Skip Rest · {pocketCooldown}</span>
+                  <div className="flex w-full items-center justify-between gap-1 text-[9px] sm:text-[10px] font-semibold text-[#6E5A46] dark:text-[#B4A08A]">
+                    <span>Pocket</span>
+                    <Inbox className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                  </div>
+
+                  <div className="flex flex-1 items-center justify-center">
+                    {pocket && !(
+                      dragSession?.hasMoved &&
+                      dragSession.source.kind === 'pocket'
+                    ) ? (
+                      <PiecePreview
+                        piece={pocket}
+                        cellSize={12}
+                        gap={1}
+                        maxWidth={44}
+                        maxHeight={20}
+                        tileSkin={activeTileSkin}
+                      />
+                    ) : (
+                      <span className="text-[10px] sm:text-[11px] font-medium text-[#8C7760] dark:text-[#786552]">
+                        {canSwapOrPark ? 'Tap / Drop' : 'Hold 1'}
+                      </span>
+                    )}
+                  </div>
                 </button>
-              ) : (
-                <div className="mt-0.5 flex h-5 items-center justify-center text-[10px] font-medium whitespace-nowrap text-[#6E5A46] dark:text-[#B4A08A]">
-                  {pocket ? (canSwapOrPark ? 'Swap' : 'Ready') : 'Reserve'}
-                </div>
-              )}
+
+                {pocketCooldown > 0 ? (
+                  <button
+                    type="button"
+                    data-testid="pocket-skip-ad"
+                    onClick={() => void handlePocketSkip()}
+                    aria-label="Watch an optional ad to make Pocket ready now"
+                    className="mt-1 flex h-4 items-center justify-center gap-1 rounded-md bg-[#1F3A34] text-[9px] font-bold text-[#F6EFE4] transition-colors hover:bg-[#274C3D] dark:bg-[#D2A16B] dark:text-[#17241E] dark:hover:bg-[#E1B882]"
+                  >
+                    <span aria-hidden="true">▶</span>
+                    <span>Skip Rest · {pocketCooldown}</span>
+                  </button>
+                ) : (
+                  <div className="mt-1 flex h-4 items-center justify-center text-[9px] sm:text-[10px] font-medium whitespace-nowrap text-[#6E5A46] dark:text-[#B4A08A]">
+                    {pocket ? (canSwapOrPark ? 'Swap' : 'Ready') : 'Reserve'}
+                  </div>
+                )}
             </div>
 
             {([
@@ -3648,6 +3714,13 @@ export default function App() {
               </div>
             ))}
           </div>
+
+          {/* Non-blocking Pocket hint: tray stuck, but Pocket still has a move. */}
+          {showPocketHint && (
+            <p className="mx-auto max-w-[430px] px-2.5 py-1.5 text-[10px] font-semibold text-center text-amber-900 dark:text-amber-200 bg-amber-100/70 dark:bg-amber-900/40 rounded-md border border-amber-300/40 dark:border-amber-500/30">
+              Move available in Pocket · tap Pocket to swap
+            </p>
+          )}
 
           {/* 3-Piece Solvable Artisan Tray */}
           <div
@@ -3817,11 +3890,20 @@ export default function App() {
 
       {/* Game Over Modal */}
       {phase === 'gameover' && viewFinalBoard && (
-        <button className="fixed bottom-4 right-4 z-50 rounded-xl bg-[#1E3A2F] p-3 text-white" onClick={() => setViewFinalBoard(false)}>Back to results</button>
+        <button
+          data-testid="back-to-options-btn"
+          className="fixed bottom-4 right-4 z-50 rounded-xl bg-[#1E3A2F] p-3 text-white shadow-lg"
+          onClick={() => {
+            setViewFinalBoard(false);
+            setShowGameOverModal(true);
+          }}
+        >
+          Back to Options
+        </button>
       )}
-      {phase === 'gameover' && !viewFinalBoard && (
+      {phase === 'gameover' && !viewFinalBoard && showGameOverModal && (
         <GameOverModal
-          onViewBoard={() => setViewFinalBoard(true)}
+          onViewBoard={handleViewBoard}
           canRevive={!reviveUsed}
           reviveStatus={reviveStatus}
           stats={runStats}
