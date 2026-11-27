@@ -4,7 +4,7 @@ import { cozyAudio } from '../game/audio';
 
 export const ConservatorySill = memo(function ConservatorySill({ delighted = false, curious = false, hero = false, compact = false }: { delighted?: boolean; curious?: boolean; hero?: boolean; compact?: boolean }) {
   const [reaction, setReaction] = useState(0);
-  return <div style={compact ? { height: 16, overflow: 'hidden', opacity: 0.45, flexShrink: 0 } : undefined} className={`conservatory-sill ${hero ? 'conservatory-hero' : ''}`}>
+  return <div style={compact ? { height: 60, overflow: 'visible', flexShrink: 0 } : undefined} className={`conservatory-sill ${hero ? 'conservatory-hero' : ''}`}>
     <svg aria-hidden="true" className="ivy ivy-left" viewBox="0 0 70 65"><path d="M4 1Q29 13 27 35T51 63" fill="none" stroke="#627751" strokeWidth="2"/><path d="M11 7Q25 0 31 13Q18 19 11 7M25 22Q8 17 7 32Q19 36 25 22M29 35Q48 25 51 41Q42 49 29 35M38 51Q20 43 22 60Q31 65 38 51" fill="#7D9865"/></svg>
     <svg aria-hidden="true" className="ivy ivy-right" viewBox="0 0 70 65"><path d="M4 1Q29 13 27 35T51 63" fill="none" stroke="#627751" strokeWidth="2"/><path d="M11 7Q25 0 31 13Q18 19 11 7M25 22Q8 17 7 32Q19 36 25 22M29 35Q48 25 51 41Q42 49 29 35M38 51Q20 43 22 60Q31 65 38 51" fill="#7D9865"/></svg>
     <svg aria-hidden="true" className="sill-prop" viewBox="0 0 62 60"><path d="M30 41Q27 16 12 10M30 41Q34 14 50 5M30 42V8" fill="none" stroke="#577650" strokeWidth="2"/><path d="M26 27Q9 28 8 13Q24 13 26 27M32 27Q34 12 50 13Q47 30 32 27M30 20Q20 14 29 2Q39 11 30 20" fill="#7C9A6F"/><path d="M17 38H44L40 56H21Z" fill="#AD674C"/><rect x="16" y="35" width="29" height="6" rx="3" fill="#C98660"/></svg>

@@ -744,7 +744,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
               dark:bg-[#191410] dark:border-[#3A2B1F] dark:text-amber-300 dark:hover:bg-[#241C16]"
           >
             <Calendar className="w-3.5 h-3.5 shrink-0" />
-            <span>Daily Haven Puzzle ({todayKey})</span>
+            <span>Daily Challenge · {todayKey}</span>
             {dailyCompletedToday ? (
               <span
                 data-testid="daily-completed-badge"

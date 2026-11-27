@@ -4,6 +4,8 @@ import { ConservatorySill, ConservatoryRain, NappingCat, SanctuaryControls } fro
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { ENABLE_FULL_META } from './game/features';
 import { requestRewardedAd } from './game/puzzleRewards';
+import { Capacitor, SystemBars, SystemBarsStyle } from '@capacitor/core';
+import { StatusBar, Style } from '@capacitor/status-bar';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Film,
@@ -106,7 +108,6 @@ import {
   registerAndroidBackHandler,
   registerAppLifecycleHandler,
   resolveBackNavigationAction,
-  syncSystemThemeChrome,
 } from './game/nativeBridge';
 import {
   generateSeedCode,
@@ -199,6 +200,18 @@ interface FloatingBanner {
   subtext?: string;
 }
 
+/** Android uses immersive bars; a swipe can reveal light system icons temporarily. */
+async function applyAndroidGameBars() {
+  if (Capacitor.getPlatform() !== 'android') return;
+  // Each operation is independent: older Android versions may reject background colors.
+  await Promise.allSettled([
+    StatusBar.setStyle({ style: Style.Dark }),
+    StatusBar.setBackgroundColor({ color: '#0F172A' }),
+    SystemBars.setStyle({ style: SystemBarsStyle.Dark }),
+    SystemBars.hide(),
+  ]);
+}
+
 const MAX_UNDO_HISTORY = 15;
 const TOUCH_THUMB_Y_OFFSET = -76;
 const MOUSE_LIFT_Y_OFFSET = -8;
@@ -258,6 +271,9 @@ function toTraySlots(pieces: PieceInstance[]): (PieceInstance | null)[] {
 
 export default function App() {
   const initialSaved = useMemo(() => loadPersistedState(), []);
+  const gameplayLayoutRef = useRef<HTMLElement | null>(null);
+  const [showGameplaySill, setShowGameplaySill] = useState(false);
+
   const [visualTheme, setVisualTheme] = useState<VisualTheme>(() => {
     try {
       const saved = localStorage.getItem('havenblocks_visual_theme');
@@ -605,10 +621,12 @@ export default function App() {
       root.classList.remove('reduced-motion-pref');
     }
     root.classList.toggle('colorblind-mode', Boolean(settings.colorblindMode));
-    void syncSystemThemeChrome(visualTheme !== 'classic').then(() => {
-      document.querySelectorAll('meta[name="theme-color"]').forEach(meta => meta.setAttribute('content', '#0F172A'));
-    });
+    document.querySelectorAll('meta[name="theme-color"]').forEach(meta => meta.setAttribute('content', '#0F172A'));
   }, [nightCandleMode, visualTheme, settings.screenShakeEnabled, settings.colorblindMode]);
+
+  useEffect(() => {
+    if (!adStatus?.active) void applyAndroidGameBars();
+  }, [adStatus?.active]);
 
   useEffect(() => {
     cozyAudio.setMuted(muted);
@@ -772,7 +790,7 @@ export default function App() {
     window.addEventListener('pagehide', handlePageHide);
     const unregisterNativeLifecycle = registerAppLifecycleHandler({
       onPause: flushAndSuspend,
-      onResume: () => cozyAudio.resume(),
+      onResume: () => { cozyAudio.resume(); void applyAndroidGameBars(); },
     });
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -2684,6 +2702,27 @@ export default function App() {
     [phase, trayHasAnyMove, pocketHasAnyMove]
   );
 
+  useEffect(() => {
+    const layout = gameplayLayoutRef.current;
+    if (!layout) return;
+    const dock = layout.querySelector<HTMLElement>('[aria-label="Tactical Dock and Piece Tray"]');
+    const measure = () => {
+      const board = layout.querySelector<HTMLElement>('[data-testid="game-board"]')?.parentElement;
+      if (!board || !dock) return;
+      const spacing = getComputedStyle(layout);
+      const available = layout.clientHeight - parseFloat(spacing.paddingTop) - parseFloat(spacing.paddingBottom);
+      // Reserve 60px for intact artwork plus gaps, Daily progress and the No Moves marker.
+      // Use the full dock height so the 64px powers strip and tray can never be sacrificed.
+      const required = board.getBoundingClientRect().height + dock.getBoundingClientRect().height + 60 + 48;
+      setShowGameplaySill(available >= required);
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(layout);
+    if (dock) observer.observe(dock);
+    measure();
+    return () => observer.disconnect();
+  }, [phase, appView]);
+
   const nativeRuntime = isNativePlatform();
 
   if (phase === 'title') {
@@ -2711,8 +2750,8 @@ export default function App() {
                 {hasSavedRunFlag && canResumeRun && <div className="mt-2 flex items-center justify-between text-xs"><span>{savedLabel}</span><button className="underline" onClick={() => startRun('zen', levelNumber)}>New Run</button></div>}
               </div>
               <button className="block w-full rounded-2xl border border-current/20 p-3 text-left hover:bg-emerald-500/5" onClick={handleStartDailyPuzzle}>
-                <span className="flex items-center justify-between gap-2"><strong className="font-display text-lg">Daily Honest Seed</strong><span className="text-[11px]">{completedDailyDates.includes(getTodayDateKey()) ? 'Completed ✓' : 'Pending'}</span></span>
-                <span className="mt-1 flex flex-wrap justify-between gap-x-2 text-[10px]"><time>{getTodayDateKey()}</time><span>Fair-Play Seed · <code>{getDailyPuzzleSeed()}</code></span></span>
+                <span className="flex items-center justify-between gap-2"><strong className="font-display text-lg">Daily Challenge</strong><span className="text-[11px]">{completedDailyDates.includes(getTodayDateKey()) ? 'Completed ✓' : 'Pending'}</span></span>
+                <span className="mt-1 flex flex-wrap justify-between gap-x-2 text-[10px]"><time>{getTodayDateKey()}</time><span>A fresh puzzle every day</span></span>
               </button>
               <footer className="space-y-3">
                 <dl className="grid grid-cols-3 divide-x divide-current/15 rounded-xl border border-current/15 py-2 text-center">
@@ -3434,7 +3473,7 @@ export default function App() {
           </React.Suspense>
         </main>
       ) : (
-      <main className="flex-1 min-h-0 w-full max-w-5xl mx-auto px-[6px] py-1 flex flex-col lg:flex-row items-center justify-center gap-1.5 lg:gap-8">
+      <main ref={gameplayLayoutRef} className="flex-1 min-h-0 w-full max-w-5xl mx-auto px-[6px] py-1 flex flex-col lg:flex-row items-center justify-center gap-1.5 lg:gap-8">
         {/* Board Column */}
         <div
           className="relative w-full max-w-[600px] flex flex-col items-center gap-1.5"
@@ -3478,7 +3517,7 @@ export default function App() {
               No Moves Left
             </div>
           )}
-          <ConservatorySill compact delighted={phase === 'playing' && (combo >= 2 || clearingKeys.size > 0)} curious={catCurious} />
+          {showGameplaySill && <ConservatorySill compact delighted={phase === 'playing' && (combo >= 2 || clearingKeys.size > 0)} curious={catCurious} />}
           <GameBoard
             decoration={mode === 'zen' && catNap && <NappingCat row={catNap.r} col={catNap.c} />}
             boardRef={boardRef}
@@ -3708,10 +3747,6 @@ export default function App() {
                 dragSession.source.kind === 'tray' &&
                 dragSession.source.index === idx;
 
-              const specialLabel = piece?.specialType
-                ? SPECIAL_BLOCK_META[piece.specialType].shortLabel
-                : null;
-
               return (
                 <div
                   key={piece ? `${trayWaveId}_${piece.uid}` : `empty_${idx}`}
@@ -3760,13 +3795,7 @@ export default function App() {
                       tileSkin={activeTileSkin}
                     />
                   ) : null}
-                  {piece && !isBeingDragged && (
-                    <span className="mt-1 sm:mt-1.5 text-[10px] leading-tight font-medium text-[#6E5A46] dark:text-[#A4907B] truncate max-w-full px-1">
-                      {specialLabel
-                        ? `${MATERIAL_META[piece.material].shortLabel} · ${specialLabel}`
-                        : MATERIAL_META[piece.material].shortLabel}
-                    </span>
-                  )}
+
                 </div>
               );
             })}
