@@ -204,7 +204,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   return (
     <div className="relative flex items-center justify-center w-full">
       <div
-        className={`w-full max-w-[clamp(160px,calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-365px),430px)] max-h-[clamp(160px,calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-365px),430px)] aspect-square p-1.5 sm:p-3.5 rounded-2xl border transition-colors duration-200
+        className={`w-full max-w-[clamp(160px,calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-270px),600px)] max-h-[clamp(160px,calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-270px),600px)] aspect-square p-[3px] rounded-2xl border transition-colors duration-200
           bg-[#DEC9A8] border-[#C4A882] shadow-[0_10px_28px_-8px_rgba(45,28,12,0.28),inset_0_2px_2px_rgba(255,250,240,0.65)]
           dark:bg-[#19130E] dark:border-[#3A2B1F] dark:shadow-[0_12px_32px_-8px_rgba(0,0,0,0.85),inset_0_1px_1px_rgba(245,190,110,0.12)] ${
             shakeKey > 0 ? (shakeKey % 2 ? 'animate-board-shake' : 'animate-board-shake-alt') : ''

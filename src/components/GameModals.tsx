@@ -29,131 +29,48 @@ import {
 } from '../game/monetization';
 import type { RunStats } from '../game/types';
 
+export const VISUAL_THEMES = [
+  { id: 'midnight', name: 'Midnight Jewel', color: '#6366F1' },
+  { id: 'royal', name: 'Royal', color: '#C026D3' },
+  { id: 'emerald', name: 'Emerald', color: '#10B981' },
+  { id: 'sunset', name: 'Sunset', color: '#FB7185' },
+  { id: 'classic', name: 'Classic', color: '#E7D8C0' },
+] as const;
+export type VisualTheme = typeof VISUAL_THEMES[number]['id'];
+
 interface PauseModalProps {
   stats: RunStats;
-  nightCandleMode: boolean;
+  visualTheme: VisualTheme;
+  tip?: string;
   muted: boolean;
   onResume: () => void;
   onRestart: () => void;
   onBackToTitle: () => void;
-  onToggleTheme: () => void;
+  onSelectTheme: (theme: VisualTheme) => void;
   onToggleMute: () => void;
 }
 
-export const PauseModal: React.FC<PauseModalProps> = ({
-  stats,
-  nightCandleMode,
-  muted,
-  onResume,
-  onRestart,
-  onBackToTitle,
-  onToggleTheme,
-  onToggleMute,
-}) => {
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Game Paused"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/55"
-    >
-      <div className="w-full max-w-sm rounded-2xl p-6 border shadow-2xl bg-[#FAF5EC] border-[#D4C0A3] text-[#2A1F15] dark:bg-[#191410] dark:border-[#3D2E22] dark:text-[#F5EDE1]">
-        <div className="flex items-center justify-between mb-1">
-          <h2 className="font-display text-2xl font-bold">Game Paused</h2>
-          <span className="font-mono-num text-xs font-semibold text-[#7A654F] dark:text-amber-300/80">
-            Fair-Play Seed · <code className="select-all">{stats.seedCode}</code>
-          </span>
-        </div>
-        <div className="text-xs text-[#6E5A46] dark:text-[#B4A08A] mb-4">
-          {stats.levelTitle}
-        </div>
-
-        <div className="grid grid-cols-2 gap-2.5 mb-5">
-          <div className="p-3 rounded-xl bg-[#EFE4D2] dark:bg-[#241C16]">
-            <div className="text-[11px] font-medium text-[#6E5A46] dark:text-[#B4A08A]">
-              Score
-            </div>
-            <div className="font-mono-num text-lg font-bold">
-              {stats.score.toLocaleString()}
-            </div>
+export const PauseModal: React.FC<PauseModalProps> = ({ stats, visualTheme, tip, muted, onResume, onRestart, onBackToTitle, onSelectTheme, onToggleMute }) => (
+  <div role="dialog" aria-modal="true" aria-label="Pause Menu" className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+    <div className="game-panel w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-3xl border p-5 shadow-2xl">
+      <h2 className="text-center text-2xl font-black">Pause Menu</h2>
+      <p className="mt-1 mb-4 text-center text-xs opacity-75">{stats.levelTitle} · {stats.score.toLocaleString()} points</p>
+      <div className="flex flex-col gap-3">
+        <button autoFocus type="button" onClick={onResume} className="game-button game-resume flex min-h-12 items-center justify-center gap-2 rounded-2xl"><Play className="size-5" />Resume</button>
+        <button type="button" onClick={onRestart} className="game-button flex min-h-12 items-center justify-center gap-2 rounded-2xl"><RotateCcw className="size-5" />Replay</button>
+        <fieldset className="rounded-2xl border border-current/20 p-3">
+          <legend className="px-2 text-xs font-bold">Theme · {VISUAL_THEMES.find(t => t.id === visualTheme)?.name}</legend>
+          <div className="flex justify-between gap-2">
+            {VISUAL_THEMES.map(theme => <button key={theme.id} type="button" aria-label={theme.name} aria-pressed={visualTheme === theme.id} onClick={() => onSelectTheme(theme.id)} className="grid size-10 place-items-center rounded-full border-2 border-white/40 shadow-md" style={{ background: theme.color, outline: visualTheme === theme.id ? '3px solid var(--game-text)' : undefined, outlineOffset: 2 }}>{visualTheme === theme.id && <Check className="size-5 text-white" />}</button>)}
           </div>
-          <div className="p-3 rounded-xl bg-[#EFE4D2] dark:bg-[#241C16]">
-            <div className="text-[11px] font-medium text-[#6E5A46] dark:text-[#B4A08A]">
-              Lines Cleared
-            </div>
-            <div className="font-mono-num text-lg font-bold">
-              {stats.linesCleared}
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2.5 mb-5">
-          <button
-            type="button"
-            onClick={onToggleTheme}
-            className="flex items-center justify-center gap-2 min-h-[44px] px-3 py-2 rounded-xl text-xs font-semibold border bg-[#F3E9D8] border-[#D4C0A3] hover:bg-[#E7D8C0] dark:bg-[#221A14] dark:border-[#3D2E22] dark:hover:bg-[#2C221A]"
-          >
-            {nightCandleMode ? (
-              <>
-                <Sun className="w-4 h-4 text-amber-400" />
-                <span>Daylight</span>
-              </>
-            ) : (
-              <>
-                <Moon className="w-4 h-4 text-amber-700" />
-                <span>Candlelight</span>
-              </>
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={onToggleMute}
-            className="flex items-center justify-center gap-2 min-h-[44px] px-3 py-2 rounded-xl text-xs font-semibold border bg-[#F3E9D8] border-[#D4C0A3] hover:bg-[#E7D8C0] dark:bg-[#221A14] dark:border-[#3D2E22] dark:hover:bg-[#2C221A]"
-          >
-            {muted ? (
-              <>
-                <VolumeX className="w-4 h-4" />
-                <span>Muted</span>
-              </>
-            ) : (
-              <>
-                <Volume2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
-                <span>Sound On</span>
-              </>
-            )}
-          </button>
-        </div>
-
-        <div className="flex flex-col gap-2.5">
-          <button
-            type="button"
-            onClick={onResume}
-            className="w-full inline-flex items-center justify-center gap-2 min-h-[46px] px-5 py-2.5 rounded-xl font-semibold text-sm text-[#FDF8F2] bg-[#1E3A2F] hover:bg-[#274C3D] dark:bg-amber-600 dark:hover:bg-amber-500 dark:text-[#120D08]"
-          >
-            <Play className="w-4 h-4 fill-current" />
-            <span>Resume Game</span>
-          </button>
-          <button
-            type="button"
-            onClick={onRestart}
-            className="w-full inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2.5 rounded-xl font-semibold text-sm border bg-[#EFE4D2] border-[#D4C0A3] hover:bg-[#E5D4BA] dark:bg-[#241C16] dark:border-[#3D2E22] dark:hover:bg-[#2E241C]"
-          >
-            <RotateCcw className="w-4 h-4" />
-            <span>Restart</span>
-          </button>
-          <button
-            type="button"
-            onClick={onBackToTitle}
-            className="w-full inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2.5 rounded-xl font-semibold text-sm text-[#6E5A46] hover:text-[#2A1F15] dark:text-[#B4A08A] dark:hover:text-[#F5EDE1]"
-          >
-            <Home className="w-4 h-4" />
-            <span>Title Screen</span>
-          </button>
-        </div>
+        </fieldset>
+        <button type="button" onClick={onToggleMute} aria-pressed={!muted} className="game-button flex min-h-12 items-center justify-center gap-2 rounded-2xl">{muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}Sound {muted ? 'Off' : 'On'}</button>
+        <button type="button" onClick={onBackToTitle} className="game-button flex min-h-12 items-center justify-center gap-2 rounded-2xl"><Home className="size-5" />Exit to Menu</button>
       </div>
+      <details className="mt-4 text-xs opacity-75"><summary className="cursor-pointer font-bold">Run info</summary><p className="mt-2">Fair-Play Seed · {stats.seedCode}</p><p>{stats.linesCleared} lines cleared</p>{tip && <p className="mt-2">{tip}</p>}<p>Daily milestones: 1,500+ points and beyond. Progress is kept during this run.</p></details>
     </div>
-  );
-};
+  </div>
+);
 
 interface LeaveMatchModalProps {
   stats: RunStats;
