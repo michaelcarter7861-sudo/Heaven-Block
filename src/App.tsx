@@ -2350,11 +2350,29 @@ export default function App() {
       if (e.pointerId === dragSessionRef.current?.pointerId) handleWindowBlur();
     };
 
+    const handleLostPointerCapture = (e: PointerEvent) => {
+      if (e.pointerId !== dragSessionRef.current?.pointerId) return;
+      // Losing capture is not a finger release. Keep tracking on a stable node;
+      // real pointerup/pointercancel events already clear the session above.
+      try {
+        document.documentElement.setPointerCapture(e.pointerId);
+      } catch {
+        handleWindowBlur(); // The pointer is no longer active.
+      }
+    };
+
+    const handleViewportResize = () => {
+      // Android system/browser bars can resize the viewport mid-touch. Refresh
+      // hit rectangles on the next move/drop instead of dropping the piece.
+      dragBoardRectRef.current = null;
+      dragPocketRectRef.current = null;
+    };
+
     window.addEventListener('pointermove', handlePointerMove, { passive: true });
     window.addEventListener('pointerup', handlePointerEnd);
     window.addEventListener('pointercancel', handlePointerCancel);
-    window.addEventListener('lostpointercapture', handlePointerCancel);
-    window.addEventListener('resize', handleWindowBlur);
+    window.addEventListener('lostpointercapture', handleLostPointerCapture);
+    window.addEventListener('resize', handleViewportResize);
     window.addEventListener('blur', handleWindowBlur);
 
     return () => {
@@ -2362,8 +2380,8 @@ export default function App() {
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerEnd);
       window.removeEventListener('pointercancel', handlePointerCancel);
-      window.removeEventListener('lostpointercapture', handlePointerCancel);
-      window.removeEventListener('resize', handleWindowBlur);
+      window.removeEventListener('lostpointercapture', handleLostPointerCapture);
+      window.removeEventListener('resize', handleViewportResize);
       window.removeEventListener('blur', handleWindowBlur);
     };
   }, []);
