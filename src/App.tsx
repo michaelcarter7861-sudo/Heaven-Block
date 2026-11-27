@@ -34,6 +34,8 @@ import {
   HelpModal,
   LeaveMatchModal,
   PauseModal,
+  VISUAL_THEMES,
+  type VisualTheme,
   VictoryModal,
 } from './components/GameModals';
 import { JournalModal } from './components/JournalModal';
@@ -256,6 +258,17 @@ function toTraySlots(pieces: PieceInstance[]): (PieceInstance | null)[] {
 
 export default function App() {
   const initialSaved = useMemo(() => loadPersistedState(), []);
+  const [visualTheme, setVisualTheme] = useState<VisualTheme>(() => {
+    try {
+      const saved = localStorage.getItem('havenblocks_visual_theme');
+      return VISUAL_THEMES.find(theme => theme.id === saved)?.id ?? 'midnight';
+    } catch { return 'midnight'; }
+  });
+  useEffect(() => {
+    document.documentElement.dataset.visualTheme = visualTheme;
+    try { localStorage.setItem('havenblocks_visual_theme', visualTheme); } catch { /* Storage may be disabled. */ }
+  }, [visualTheme]);
+
   const urlParams = useMemo(() => {
     if (typeof window === 'undefined') return new URLSearchParams();
     return new URLSearchParams(window.location.search);
@@ -581,7 +594,7 @@ export default function App() {
   // Sync Tailwind dark class, reduced-motion preference, colorblind symbols, and Edge-to-Edge StatusBar chrome
   useEffect(() => {
     const root = document.documentElement;
-    if (nightCandleMode) {
+    if (visualTheme !== 'classic') {
       root.classList.add('dark');
     } else {
       root.classList.remove('dark');
@@ -592,8 +605,10 @@ export default function App() {
       root.classList.remove('reduced-motion-pref');
     }
     root.classList.toggle('colorblind-mode', Boolean(settings.colorblindMode));
-    void syncSystemThemeChrome(nightCandleMode);
-  }, [nightCandleMode, settings.screenShakeEnabled, settings.colorblindMode]);
+    void syncSystemThemeChrome(visualTheme !== 'classic').then(() => {
+      document.querySelectorAll('meta[name="theme-color"]').forEach(meta => meta.setAttribute('content', '#0F172A'));
+    });
+  }, [nightCandleMode, visualTheme, settings.screenShakeEnabled, settings.colorblindMode]);
 
   useEffect(() => {
     cozyAudio.setMuted(muted);
@@ -2674,7 +2689,7 @@ export default function App() {
                 <p className="text-[10px] font-semibold uppercase tracking-widest">{nightCandleMode ? 'Night Candlelight' : 'Morning Cottage'}</p>
               </header>
               <div>
-                <button className="w-full rounded-xl bg-[#1f3a34] py-3.5 font-bold text-[#f6efe4] shadow-md dark:bg-[#d7ac76] dark:text-[#17241e]" onClick={hasSavedRunFlag && canResumeRun ? resumeSavedRun : () => startRun('zen', levelNumber)}>{hasSavedRunFlag && canResumeRun ? 'Resume Game' : 'Play Endless'}</button>
+                <button className="game-button w-full rounded-xl bg-[#1f3a34] py-3.5 font-bold text-[#f6efe4] shadow-md dark:bg-[#d7ac76] dark:text-[#17241e]" onClick={hasSavedRunFlag && canResumeRun ? resumeSavedRun : () => startRun('zen', levelNumber)}>{hasSavedRunFlag && canResumeRun ? 'Resume Game' : 'Play Endless'}</button>
                 {hasSavedRunFlag && canResumeRun && <div className="mt-2 flex items-center justify-between text-xs"><span>{savedLabel}</span><button className="underline" onClick={() => startRun('zen', levelNumber)}>New Run</button></div>}
               </div>
               <button className="block w-full rounded-2xl border border-current/20 p-3 text-left hover:bg-emerald-500/5" onClick={handleStartDailyPuzzle}>
@@ -2911,39 +2926,23 @@ export default function App() {
   return (
     <ActiveTierContext.Provider value={activeTier.tier}>
     <div
+      data-visual-theme={visualTheme}
       data-conservatory={conservatory}
       data-puzzle-ambience={puzzleAmbience}
       className={`safe-area-shell ${appView === 'puzzle' ? 'play-shell' : 'min-h-dvh'} ${dragSession?.hasMoved ? 'is-dragging' : ''} w-full overflow-x-hidden flex flex-col justify-between select-none text-[#2A1F15] dark:text-[#F5EDE1] transition-colors duration-300 ${ambienceBgClass}`}
     >
       {conservatory === 'rain' && <ConservatoryRain />}
       {!ENABLE_FULL_META ? (
-        <header inert={phase === 'gameover'} className="relative mx-auto grid w-full max-w-[620px] gap-1.5 px-3 py-2">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-2">
-              <button aria-label="Pause game" type="button" className="grid size-10 shrink-0 place-items-center rounded-xl border border-current/20" onClick={() => { if (phase === 'playing' && !dragSessionRef.current) setPhase('paused'); }}><Pause className="size-4" /></button>
-              <span className="min-w-0 truncate font-display font-bold">{mode === 'duel' ? `Daily · ${seedCode.replace(/^DAILY-/, '')}` : 'Endless Zen'}</span>
-              {mode === 'zen' && (
-                <span
-                  data-testid="zen-tier-indicator"
-                  className="inline-flex shrink-0 items-center gap-1 rounded-md border border-current/25 bg-current/5 px-1.5 py-0.5 font-mono-num text-[10px] font-bold tracking-wider"
-                >
-                  <span
-                    aria-hidden="true"
-                    className="size-1.5 rounded-full"
-                    style={{ backgroundColor: activeTier.accentHex }}
-                  />
-                  {activeTier.label}
-                </span>
-              )}
-            </div>
-            <dl className="flex gap-3 text-right text-[10px] font-semibold">
-              <div><dt>Score</dt><dd data-testid="score-value" className="font-mono-num text-sm">{score.toLocaleString()}</dd></div>
-              <div><dt>Best</dt><dd data-testid="best-score-value" className="font-mono-num text-sm">{runStats.bestScore.toLocaleString()}</dd></div>
-            </dl>
-          </div>
-          <div className="flex items-center justify-between gap-1.5 border-t border-current/15 pt-1">
-            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] font-semibold"><span>Lines: {linesCleared}</span><span className="rounded-full border border-current/20 px-1.5 py-0.5">Fair-Play Seed · <code className="select-all">{seedCode}</code></span></div>
-            <SanctuaryControls night={nightCandleMode} muted={muted} onTheme={() => setNightCandleMode(v => !v)} onSound={toggleMute} onSettings={() => setShowSettingsModal(true)} />
+        <header inert={phase === 'gameover'} className="relative mx-auto flex h-[52px] shrink-0 w-full max-w-[620px] items-center justify-between gap-2 px-2">
+          <button aria-label="Pause game" type="button" className="game-button grid size-10 shrink-0 place-items-center rounded-xl" onClick={() => { if (phase === 'playing' && !dragSessionRef.current) setPhase('paused'); }}><Pause className="size-6 fill-current" /></button>
+          <dl className="flex min-w-0 items-center gap-3 text-center text-[9px] font-bold uppercase">
+            <div><dt>Score</dt><dd data-testid="score-value" className="text-lg leading-5 tabular-nums">{score.toLocaleString()}</dd></div>
+            <div><dt>Best</dt><dd data-testid="best-score-value" className="text-sm leading-5 tabular-nums">{runStats.bestScore.toLocaleString()}</dd></div>
+            <div data-testid={mode === 'zen' ? 'zen-tier-indicator' : undefined} className="rounded-lg bg-white/10 px-2 py-1 text-[9px]">LVL {mode === 'zen' ? activeTier.tier : levelNumber}</div>
+          </dl>
+          <div className="flex shrink-0 gap-1">
+            <button type="button" aria-label="Change theme" className="game-button grid size-9 place-items-center rounded-xl" onClick={() => setVisualTheme(VISUAL_THEMES[(VISUAL_THEMES.findIndex(t => t.id === visualTheme) + 1) % VISUAL_THEMES.length].id)}><Sparkles className="size-4" /></button>
+            <button type="button" aria-label="Toggle sound" aria-pressed={!muted} className="game-button grid size-9 place-items-center rounded-xl" onClick={toggleMute}>{muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}</button>
           </div>
         </header>
       ) : (
@@ -3417,43 +3416,18 @@ export default function App() {
           </React.Suspense>
         </main>
       ) : (
-      <main className="flex-1 w-full max-w-5xl mx-auto px-2.5 sm:px-6 py-0.5 sm:py-2 flex flex-col lg:flex-row items-center justify-center gap-1.5 sm:gap-4 lg:gap-8">
+      <main className="flex-1 min-h-0 w-full max-w-5xl mx-auto px-[6px] py-1 flex flex-col lg:flex-row items-center justify-center gap-1.5 lg:gap-8">
         {/* Board Column */}
         <div
-          className="relative w-full max-w-[430px] flex flex-col items-center gap-1.5 sm:gap-2"
+          className="relative w-full max-w-[600px] flex flex-col items-center gap-1.5"
           onPointerMove={handleBoardPointerMove}
           onPointerLeave={() => setHoverCell(null)}
         >
           {/* Story Goal / Duel Progress Strip */}
           {isDailyRun ? (
-            <>
-              {dailyMilestoneProgress && dailyMilestoneProgress.completed > 0 && (
-                <p data-testid="daily-goal-complete" className="rounded-full border border-current/20 px-2 py-0.5 text-[10px] font-bold">{dailyMilestoneProgress?.finished ? 'All Daily Milestones Complete ✓' : 'Daily Goal Complete ✓'}</p>
-              )}
-              {dailyMilestoneProgress && !dailyMilestoneProgress.finished && (
-                <div
-                  data-testid="goal-progress-bar"
-                  className="w-full px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-xl border bg-[#EFE4D2] border-[#D4C0A3] dark:bg-[#17120E] dark:border-[#36281D]"
-                >
-                  <div className="flex items-center justify-between text-[10px] sm:text-xs font-semibold mb-0.5 sm:mb-0.5">
-                    <span className="text-[#2A1F15] dark:text-[#F5EDE1]">
-                      {dailyMilestoneProgress.completed === 0
-                        ? 'Daily Haven Target (1,500+)'
-                        : `Daily Milestone ${dailyMilestoneProgress.completed}/4 ✓ · Next ${goal.target.toLocaleString()}`}
-                    </span>
-                    <span className="font-mono-num text-[#1E3A2F] dark:text-amber-300">
-                      {score.toLocaleString()} pts · {goalPct}%
-                    </span>
-                  </div>
-                  <div className="w-full h-1.5 rounded-full overflow-hidden bg-[#D8C5A8] dark:bg-[#2B2017]">
-                    <div
-                      className="h-full rounded-full transition-all duration-300 bg-[#1E3A2F] dark:bg-amber-500"
-                      style={{ width: `${goalPct}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-            </>
+            <div data-testid="goal-progress-bar" role="progressbar" aria-label="Daily progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={goalPct} className="h-1 w-full shrink-0 overflow-hidden rounded-full bg-white/10">
+              <div className="h-full rounded-full bg-emerald-400" style={{ width: `${goalPct}%` }} />
+            </div>
           ) : mode !== 'zen' && (
           <div
             data-testid="goal-progress-bar"
@@ -3486,7 +3460,7 @@ export default function App() {
               No Moves Left
             </div>
           )}
-          <ConservatorySill delighted={phase === 'playing' && (combo >= 2 || clearingKeys.size > 0)} curious={catCurious} />
+          <ConservatorySill compact delighted={phase === 'playing' && (combo >= 2 || clearingKeys.size > 0)} curious={catCurious} />
           <GameBoard
             decoration={mode === 'zen' && catNap && <NappingCat row={catNap.r} col={catNap.c} />}
             boardRef={boardRef}
@@ -3507,7 +3481,7 @@ export default function App() {
           />
 
           {/* Floating Score / Special FX Banner */}
-          {phase === 'playing' && banner && (
+          {phase === 'playing' && banner && !/Daily (Milestone|Goal)/.test(banner.text) && (
             <div
               key={banner.id}
               data-testid="floating-banner"
@@ -3528,7 +3502,7 @@ export default function App() {
         <section
           inert={phase === 'gameover'}
           aria-label="Tactical Dock and Piece Tray"
-          className="w-full max-w-[430px] lg:max-w-[380px] flex flex-col gap-1.5 sm:gap-2"
+          className="relative w-full max-w-[600px] lg:max-w-[380px] shrink-0 flex flex-col gap-1.5"
         >
           {/* First-Session Payoff: Non-Blocking, Skippable Guided First Sofa Prompt */}
           {ENABLE_FULL_META && showFirstSofaPrompt && (
@@ -3600,27 +3574,6 @@ export default function App() {
                   </div>
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Contextual Just-In-Time (JIT) Dismissible Tooltip */}
-          {activeJitTip && (
-            <div
-              data-testid={`jit-tip-${activeJitTip.id}`}
-              className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl border bg-amber-50/90 border-amber-300/80 text-[#3B2A1A] dark:bg-[#1E1710] dark:border-amber-500/35 dark:text-amber-100"
-            >
-              <div className="text-[11px] leading-snug">
-                <span className="font-bold mr-1">{activeJitTip.title}:</span>
-                <span>{activeJitTip.body}</span>
-              </div>
-              <button
-                type="button"
-                data-testid="dismiss-jit-tip-btn"
-                onClick={() => dismissTip(activeJitTip.id)}
-                className="px-2 py-0.5 rounded-lg text-[10px] font-bold border border-amber-400/60 bg-amber-100/80 text-amber-950 hover:bg-amber-200/80 dark:bg-amber-500/20 dark:text-amber-200 shrink-0"
-              >
-                Got it
-              </button>
             </div>
           )}
 
@@ -3717,7 +3670,7 @@ export default function App() {
 
           {/* Non-blocking Pocket hint: tray stuck, but Pocket still has a move. */}
           {showPocketHint && (
-            <p className="mx-auto max-w-[430px] px-2.5 py-1.5 text-[10px] font-semibold text-center text-amber-900 dark:text-amber-200 bg-amber-100/70 dark:bg-amber-900/40 rounded-md border border-amber-300/40 dark:border-amber-500/30">
+            <p className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 z-20 w-max max-w-full px-2.5 py-1.5 text-[10px] font-semibold text-center text-amber-900 dark:text-amber-200 bg-amber-100/70 dark:bg-amber-900/40 rounded-md border border-amber-300/40 dark:border-amber-500/30">
               Move available in Pocket · tap Pocket to swap
             </p>
           )}
@@ -3827,7 +3780,8 @@ export default function App() {
       {phase === 'paused' && !showLeaveMatchModal && (
         <PauseModal
           stats={runStats}
-          nightCandleMode={nightCandleMode}
+          tip={activeJitTip ? `${activeJitTip.title}: ${activeJitTip.body}` : undefined}
+          visualTheme={visualTheme}
           muted={muted}
           onResume={() => {
             document.body.dataset.state = 'playing';
@@ -3839,7 +3793,7 @@ export default function App() {
             document.body.dataset.state = 'title';
             setPhase('title');
           }}
-          onToggleTheme={() => setNightCandleMode((v) => !v)}
+          onSelectTheme={setVisualTheme}
           onToggleMute={toggleMute}
         />
       )}

@@ -586,3 +586,73 @@ html.colorblind-mode .colorblind-material-symbol {
 }
 [data-conservatory="candlelight"] [data-testid="game-board"] { background:#23352c; border-color:#46574a; }
 [data-conservatory="candlelight"] [data-cell-kind="empty"] { background-color:#35453b; border-color:#49594e; }
+
+/* Static visual themes: independent of the saved run and material palette. */
+:root, [data-visual-theme="midnight"] {
+  --game-bg:#0F172A; --game-end:#1E1B4B; --game-panel:#162038;
+  --game-cell:#1E293B; --game-edge:#38466C; --game-text:#F1F5FF;
+  --game-accent:#6366F1; --game-bevel:#3730A3;
+}
+[data-visual-theme="royal"] {
+  --game-bg:#211039; --game-end:#4A145E; --game-panel:#2C1946;
+  --game-cell:#3B2458; --game-edge:#704390; --game-accent:#C026D3; --game-bevel:#86198F;
+}
+[data-visual-theme="emerald"] {
+  --game-bg:#052E2B; --game-end:#064E3B; --game-panel:#083B36;
+  --game-cell:#145048; --game-edge:#397568; --game-accent:#D99B24; --game-bevel:#946314;
+}
+[data-visual-theme="sunset"] {
+  --game-bg:#30132F; --game-end:#621D42; --game-panel:#401A3C;
+  --game-cell:#542747; --game-edge:#8B4966; --game-accent:#F47286; --game-bevel:#BE3756;
+}
+[data-visual-theme="classic"] {
+  --game-bg:#F6EFE4; --game-end:#E7D8C0; --game-panel:#EFE4D2;
+  --game-cell:#E9DCC7; --game-edge:#C4A882; --game-text:#2A1F15;
+  --game-accent:#3C7258; --game-bevel:#234633;
+}
+html[data-visual-theme] body,
+html[data-visual-theme] [data-conservatory],
+html[data-visual-theme] .play-shell {
+  background:linear-gradient(155deg,var(--game-bg),var(--game-end));
+  color:var(--game-text);
+}
+html[data-visual-theme] .game-panel,
+html[data-visual-theme] .power-card,
+html[data-visual-theme] [data-testid="piece-tray"],
+html[data-visual-theme] [aria-label="Tactical Dock and Piece Tray"] [data-testid="pocket-slot"],
+html[data-visual-theme] [data-testid="piece-tray"] > div {
+  background:var(--game-panel); border-color:var(--game-edge); color:var(--game-text);
+}
+html[data-visual-theme] [data-testid="piece-tray"] span { color:var(--game-text); }
+html[data-visual-theme] [data-testid="game-board"] {
+  background:var(--game-panel); border-color:var(--game-edge);
+}
+html[data-visual-theme] [data-testid="game-board"] [data-cell-kind="empty"]:not([data-first-move-target="true"]):not([class~="outline-2"]) {
+  background-color:var(--game-cell); border-color:var(--game-edge);
+}
+html[data-visual-theme] [data-conservatory] section:not([aria-label]) {
+  background-color:var(--game-panel); border-color:var(--game-edge); color:var(--game-text);
+}
+html[data-visual-theme] .conservatory-sill { --mist:var(--game-cell); --sill-dark:var(--game-edge); background:transparent; }
+html[data-visual-theme] .conservatory-sill::after { background:var(--game-edge); }
+.game-button,
+html[data-visual-theme] .power-card button,
+html[data-visual-theme] .sanctuary-controls button {
+  background:var(--game-accent); color:#FFF; border:1px solid #FFFFFF26;
+  box-shadow:inset 0 1px 0 #FFFFFF40,0 3px 0 var(--game-bevel);
+  font-family:var(--font-sans); font-weight:800;
+}
+.game-button:active:not(:disabled),
+html[data-visual-theme] .power-card button:active:not(:disabled),
+html[data-visual-theme] .sanctuary-controls button:active:not(:disabled) {
+  transform:translateY(3px); box-shadow:inset 0 1px 2px #0003;
+}
+.game-button:focus-visible { outline:3px solid var(--game-text); outline-offset:3px; }
+.game-button.game-resume { background:#10B981; --game-bevel:#047857; color:#042F25; }
+html[data-visual-theme] .play-shell div:has(> [data-testid="game-board"]),
+html[data-visual-theme] [data-testid="pocket-card"] {
+  background:var(--game-panel); border-color:var(--game-edge);
+  box-shadow:inset 0 2px 5px #0005,0 3px 0 #0003;
+}
+html[data-visual-theme] [data-testid="pocket-card"] span,
+html[data-visual-theme] [data-testid="pocket-card"] div { color:var(--game-text); }
